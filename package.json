@@ -1,0 +1,72 @@
+{
+  "name": "@jasonews/agent-squad-gateway",
+  "version": "0.1.0",
+  "description": "Local control plane and OpenAI-compatible API gateway for coding CLI models.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JASONews/agent-squad-gateway.git"
+  },
+  "homepage": "https://github.com/JASONews/agent-squad-gateway#readme",
+  "bugs": {
+    "url": "https://github.com/JASONews/agent-squad-gateway/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "bin": {
+    "agent-squad-gateway": "./dist/bin/agent-squad-gateway.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "translations/",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.node.json && tsc -p web/tsconfig.json && vite build",
+    "prepack": "npm run build",
+    "dev": "vite --config vite.config.ts",
+    "dev:server": "tsx watch src/bin/agent-squad-gateway.ts start --foreground",
+    "test": "vitest run",
+    "test:all": "vitest run && playwright test",
+    "test:browser": "playwright test",
+    "test:real-providers": "GATEWAY_REAL_CLI_TEST=1 vitest run tests/integration/real-providers.test.ts",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@fastify/static": "^9.1.1",
+    "@opencode-ai/sdk": "1.17.15",
+    "@tanstack/react-query": "^5.66.0",
+    "ajv": "^8.20.0",
+    "better-sqlite3": "^11.7.0",
+    "commander": "^12.1.0",
+    "fastify": "^5.2.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "openai": "^6.46.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^4.1.10"
+  }
+}

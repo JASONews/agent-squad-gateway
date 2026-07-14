@@ -1,0 +1,22 @@
+:root {
+  --bg: #f5f7f8;
+  --surface: #ffffff;
+  --surface-muted: #eef1f2;
+  --text: #172025;
+  --muted: #647078;
+  --border: #d5dbde;
+  --accent: #087f8c;
+  --success: #18794e;
+  --warning: #a15c00;
+  --danger: #c9372c;
+  --radius-control: 4px;
+  --radius-panel: 6px;
+  --sidebar-width: 224px;
+  --topbar-height: 52px;
+  --control-height: 32px;
+  --control-height-large: 36px;
+  --body-size: 14px;
+  --body-line-height: 20px;
+  --page-heading-size: 22px;
+  --page-heading-line-height: 28px;
+}
