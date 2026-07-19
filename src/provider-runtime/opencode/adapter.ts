@@ -1,11 +1,15 @@
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import type {
   AssistantMessage,
   Event as OpenCodeEvent,
+  FilePartInput,
   OpencodeClient,
   Part as OpenCodePart,
   SessionPromptResponse,
+  TextPartInput,
 } from '@opencode-ai/sdk/v2';
 import {
   API_PROVIDER_SYSTEM_INSTRUCTION,
@@ -416,6 +420,15 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
 
       const userMessageID = randomUUID();
       let nextEvent = eventIterator.next();
+      const parts: Array<TextPartInput | FilePartInput> = [
+        { type: 'text', text: promptText },
+        ...(request.images ?? []).map((image): FilePartInput => ({
+          type: 'file',
+          mime: image.mediaType,
+          filename: basename(image.path),
+          url: pathToFileURL(image.path).href,
+        })),
+      ];
       const prompt = client.session.prompt({
         sessionID,
         directory: request.workspace,
@@ -423,7 +436,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
         model,
         ...(request.effort === null ? {} : { variant: request.effort }),
         system: API_PROVIDER_SYSTEM_INSTRUCTION,
-        parts: [{ type: 'text', text: promptText }],
+        parts,
         format: request.outputSchema
           ? { type: 'json_schema', schema: request.outputSchema, retryCount: 2 }
           : { type: 'text' },

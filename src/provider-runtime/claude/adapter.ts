@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readFile } from 'node:fs/promises';
 import {
   API_PROVIDER_SYSTEM_INSTRUCTION,
   renderProviderInput,
@@ -202,11 +203,32 @@ export class ClaudeProviderAdapter implements ProviderAdapter {
       '--model', request.model,
       ...(request.effort ? ['--effort', request.effort] : []),
       '--output-format', 'stream-json', '--include-partial-messages', '--verbose',
-      '--input-format', 'text',
+      '--input-format', (request.images?.length ?? 0) > 0 ? 'stream-json' : 'text',
       ...(request.sessionMode === 'ephemeral' ? ['--no-session-persistence'] : []),
       ...(nativeSessionId ? ['--resume', nativeSessionId] : []),
       ...(request.outputSchema ? ['--json-schema', JSON.stringify(request.outputSchema)] : []),
     ];
+  }
+
+  private async input(request: ProviderRequest): Promise<string> {
+    const text = renderProviderInput(request.input);
+    if ((request.images?.length ?? 0) === 0) return text;
+    const content: Array<Record<string, unknown>> = [{ type: 'text', text }];
+    for (const image of request.images!) {
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: image.mediaType,
+          data: (await readFile(image.path)).toString('base64'),
+        },
+      });
+    }
+    return `${JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content },
+      parent_tool_use_id: null,
+    })}\n`;
   }
 
   private async *stream(
@@ -233,7 +255,7 @@ export class ClaudeProviderAdapter implements ProviderAdapter {
     request.signal.addEventListener('abort', onAbort, { once: true });
 
     try {
-      const input = renderProviderInput(request.input);
+      const input = await this.input(request);
       managed = this.spawnProcess({
         command: 'claude',
         args: this.args(request, nativeSessionId),

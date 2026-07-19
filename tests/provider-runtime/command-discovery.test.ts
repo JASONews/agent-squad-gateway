@@ -67,6 +67,10 @@ describe('provider command discovery', () => {
   it('uses cursor-agent as the Cursor executable', () => {
     expect(BUILT_IN_PROVIDER_COMMANDS.cursor).toBe('cursor-agent');
   });
+
+  it('uses kimi as the Kimi Code executable', () => {
+    expect(BUILT_IN_PROVIDER_COMMANDS.kimi).toBe('kimi');
+  });
 });
 
 function executable(path: string): string {

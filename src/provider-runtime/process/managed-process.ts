@@ -59,15 +59,22 @@ function validGraceMs(value: number): boolean {
 }
 
 function signalProcessGroup(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): boolean {
-  if (child.exitCode !== null || child.signalCode !== null) return false;
   try {
-    if (process.platform === 'win32' || child.pid === undefined) return child.kill(signal);
+    if (process.platform === 'win32') {
+      if (child.exitCode !== null || child.signalCode !== null) return false;
+      return child.kill(signal);
+    }
+    if (child.pid === undefined) return false;
     process.kill(-child.pid, signal);
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
     throw new ManagedProcessError('adapter_process_error');
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export const spawnManagedProcess: SpawnManagedProcess = (spec) => {
@@ -104,14 +111,47 @@ export const spawnManagedProcess: SpawnManagedProcess = (spec) => {
     });
   }
 
-  async function interrupt(graceMs = DEFAULT_INTERRUPT_GRACE_MS): Promise<void> {
-    if (!validGraceMs(graceMs)) throw new ManagedProcessError('adapter_process_error');
-    if (settled || !signalProcessGroup(child, 'SIGINT')) return;
-    if (await waitForExit(graceMs)) return;
+  async function killResidualProcessGroup(graceMs: number): Promise<void> {
+    if (process.platform === 'win32') return;
+    try {
+      if (!signalProcessGroup(child, 'SIGTERM')) return;
+    } catch {
+      return;
+    }
+    if (graceMs > 0) await delay(Math.min(graceMs, 100));
+    try {
+      signalProcessGroup(child, 'SIGKILL');
+    } catch {
+      // The process group may disappear between the graceful and forced signals.
+    }
+  }
+
+  let interruption: Promise<void> | null = null;
+
+  async function performInterrupt(graceMs: number): Promise<void> {
+    const leaderAlreadySettled = settled;
+    if (!signalProcessGroup(child, 'SIGINT')) return;
+    if (leaderAlreadySettled) {
+      await killResidualProcessGroup(graceMs);
+      return;
+    }
+    if (await waitForExit(graceMs)) {
+      await killResidualProcessGroup(graceMs);
+      return;
+    }
     if (!signalProcessGroup(child, 'SIGTERM')) return;
-    if (await waitForExit(graceMs)) return;
+    if (await waitForExit(graceMs)) {
+      signalProcessGroup(child, 'SIGKILL');
+      return;
+    }
     if (!signalProcessGroup(child, 'SIGKILL')) return;
     await waitForExit(graceMs);
+  }
+
+  function interrupt(graceMs = DEFAULT_INTERRUPT_GRACE_MS): Promise<void> {
+    if (!validGraceMs(graceMs)) throw new ManagedProcessError('adapter_process_error');
+    interruption ??= performInterrupt(graceMs);
+    return interruption;
   }
 
   return {

@@ -19,7 +19,7 @@ OpenAI client / LiteLLM / IDE
             |
   Agent Squad Gateway + Web UI
             |
- Codex / Claude Code / Cursor Agent / OpenCode / Antigravity
+ Codex / Claude Code / Cursor Agent / OpenCode / Antigravity / Kimi Code
 ```
 
 ## Features
@@ -49,18 +49,16 @@ OpenAI client / LiteLLM / IDE
   - Cursor Agent (`cursor-agent`)
   - OpenCode (`opencode`)
   - Antigravity (`agy`)
+  - Kimi Code (`kimi`)
 
 ## Install
 
-### GitHub Packages
+### npm
 
-For the private GitHub Packages test release, authenticate with a GitHub token that can read the
-package:
+Agent Squad Gateway is a public package on the npm registry. No registry token is required:
 
 ```bash
-npm config set @jasonews:registry https://npm.pkg.github.com
-npm config set //npm.pkg.github.com/:_authToken "$GITHUB_PACKAGES_TOKEN"
-npm install -g @jasonews/agent-squad-gateway@0.1.0
+npm install -g @jasonews/agent-squad-gateway
 ```
 
 Verify the command:

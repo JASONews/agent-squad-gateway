@@ -13,7 +13,8 @@
     "url": "https://github.com/JASONews/agent-squad-gateway/issues"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "bin": {
     "agent-squad-gateway": "./dist/bin/agent-squad-gateway.js"
@@ -40,6 +41,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.2.1",
     "@fastify/static": "^9.1.1",
     "@opencode-ai/sdk": "1.17.15",
     "@tanstack/react-query": "^5.66.0",

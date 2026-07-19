@@ -6,6 +6,7 @@ import {
   InvocationService,
   type InvocationRequest,
 } from '../../src/provider-runtime/invocation-service.js';
+import type { ImageAssetMaterializerLike } from '../../src/provider-runtime/image-assets.js';
 import { ProviderRegistry } from '../../src/provider-runtime/registry.js';
 import { TargetScheduler } from '../../src/provider-runtime/scheduler.js';
 import type {
@@ -104,11 +105,15 @@ function sequence(events: unknown[]): AsyncIterable<unknown> {
   })();
 }
 
-function harness(adapter: ProviderAdapter, invocationTarget = target()) {
+function harness(
+  adapter: ProviderAdapter,
+  invocationTarget = target(),
+  imageAssets?: ImageAssetMaterializerLike,
+) {
   db = openGatewayDb(':memory:');
   const runs = new RunRepository(db);
   const registry = new ProviderRegistry();
-  registry.register('fake', adapter);
+  registry.register(invocationTarget.cli, adapter);
   const release = vi.fn(async () => undefined);
   const workspaces = {
     acquireChat: vi.fn(async () => ({ path: '/safe/chat', release })),
@@ -121,6 +126,7 @@ function harness(adapter: ProviderAdapter, invocationTarget = target()) {
     workspaces,
     { get: vi.fn(() => invocationTarget) },
     runs,
+    imageAssets,
   );
   return { service, runs, workspaces, release };
 }
@@ -215,6 +221,66 @@ describe('InvocationService', () => {
     ]);
     const columns = db!.prepare<[], { name: string }>('PRAGMA table_info(runs)').all().map(({ name }) => name);
     expect(columns).not.toEqual(expect.arrayContaining(['prompt', 'completion', 'tool_payload', 'raw_event']));
+  });
+
+  it('materializes image references before provider start and releases them before the terminal event', async () => {
+    const order: string[] = [];
+    const adapter = adapterFrom((providerRequest) => {
+      order.push('provider');
+      expect(providerRequest.images).toEqual([{
+        path: '/private/tmp/staged.png',
+        mediaType: 'image/png',
+        detail: 'high',
+      }]);
+      return sequence([
+        { type: 'session_started', nativeSessionId: 'native-image' },
+        { type: 'completed' },
+      ]);
+    });
+    const imageRelease = vi.fn(async () => { order.push('image-release'); });
+    const imageAssets: ImageAssetMaterializerLike = {
+      materialize: vi.fn(async () => ({
+        images: [{
+          path: '/private/tmp/staged.png',
+          mediaType: 'image/png',
+          detail: 'high',
+        }],
+        release: imageRelease,
+      })),
+    };
+    const { service } = harness(adapter, target({ cli: 'codex' }), imageAssets);
+    const iterator = service.invoke(request({
+      images: [{ url: 'data:image/png;base64,abc', detail: 'high' }],
+    }))[Symbol.asyncIterator]();
+
+    await iterator.next();
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: { type: 'completed' } });
+    order.push('terminal');
+
+    expect(imageAssets.materialize).toHaveBeenCalledWith(
+      [{ url: 'data:image/png;base64,abc', detail: 'high' }],
+      expect.any(AbortSignal),
+    );
+    expect(imageRelease).toHaveBeenCalledOnce();
+    expect(order).toEqual(['provider', 'image-release', 'terminal']);
+  });
+
+  it('rejects image input before adapter start when the provider has no native image channel', async () => {
+    const adapter = adapterFrom(() => sequence([]));
+    const imageAssets: ImageAssetMaterializerLike = { materialize: vi.fn() };
+    const { service, runs } = harness(adapter, target({ cli: 'cursor' }), imageAssets);
+
+    await expect(collect(service.invoke(request({
+      images: [{ url: 'https://example.com/image.png', detail: 'auto' }],
+    })))).resolves.toEqual([{
+      type: 'failed',
+      code: 'image_input_not_supported',
+      message: 'Provider invocation failed',
+      nativeStateAdvanced: false,
+    }]);
+    expect(adapter.start).not.toHaveBeenCalled();
+    expect(imageAssets.materialize).not.toHaveBeenCalled();
+    expect(runs.list()[0]).toMatchObject({ status: 'failed', errorCode: 'image_input_not_supported' });
   });
 
   it('opens a persistent response workspace and resumes its native session', async () => {

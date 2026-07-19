@@ -12,9 +12,14 @@ import type { InvocationServiceLike } from '../contract.js';
 import {
   deserializeOpenAIReplay,
   OpenAIError,
+  providerFailureError,
   serializeOpenAIFailure,
   serializeOpenAISuccess,
 } from './errors.js';
+import {
+  assertImageInputSupported,
+  normalizeChatInput,
+} from './image-input.js';
 import { OPENAI_EXTENSION_ID } from './models.js';
 import type { OpenAIRunAttempt } from './run-attempt.js';
 import { ChatRequestSchema, type ChatRequest } from './schemas.js';
@@ -23,7 +28,6 @@ import {
   AdapterProtocolError,
   assignGatewayCallIds,
   buildToolOutputSchema,
-  normalizeChatToolRoundTrip,
   StructuredEnvelopeDecoder,
   ToolInputError,
   type ToolOutputSchema,
@@ -80,14 +84,8 @@ function protocolError(): OpenAIError {
   );
 }
 
-function providerError(): OpenAIError {
-  return new OpenAIError(
-    502,
-    'The provider could not complete the request',
-    'server_error',
-    null,
-    'provider_error',
-  );
+function providerError(code = 'provider_error'): OpenAIError {
+  return providerFailureError(code, 'messages');
 }
 
 function toolBridge(request: ChatRequest, targetToolBridge: 'structured_output' | 'none'): ToolOutputSchema | null {
@@ -99,15 +97,6 @@ function toolBridge(request: ChatRequest, targetToolBridge: 'structured_output' 
     if (error instanceof OpenAIError) throw error;
     if (error instanceof ToolInputError) throw invalidRequest();
     throw invalidRequest();
-  }
-}
-
-function chatInput(request: ChatRequest) {
-  try {
-    return normalizeChatToolRoundTrip(request.messages);
-  } catch (error) {
-    if (error instanceof ToolInputError) throw invalidRequest();
-    throw error;
   }
 }
 
@@ -146,7 +135,7 @@ async function collectCompletion(
           break;
         case 'failed':
           if (event.code === 'adapter_protocol_error') throw protocolError();
-          throw providerError();
+          throw providerError(event.code);
         case 'cancelled':
           throw new OpenAIError(
             500,
@@ -225,7 +214,8 @@ export async function handleChatCompletion(
     throw error;
   }
   const outputSchema = toolBridge(request, target.toolBridge);
-  const input = chatInput(request);
+  const normalized = normalizeChatInput(request.messages);
+  assertImageInputSupported(target.cli, normalized.images, 'messages');
 
   const execute = async (runId?: string): Promise<ChatCompletion> => {
     let invocation;
@@ -236,7 +226,8 @@ export async function handleChatCompletion(
         extensionId: OPENAI_EXTENSION_ID,
         targetId: target.id,
         endpoint: 'chat.completions',
-        input,
+        input: normalized.input,
+        ...(normalized.images.length === 0 ? {} : { images: normalized.images }),
         sessionMode: 'ephemeral',
         ...(outputSchema === null ? {} : { outputSchema }),
       });
@@ -366,7 +357,8 @@ export async function handleChatCompletionStream(
     throw error;
   }
   const outputSchema = toolBridge(request, target.toolBridge);
-  const input = chatInput(request);
+  const normalized = normalizeChatInput(request.messages);
+  assertImageInputSupported(target.cli, normalized.images, 'messages');
 
   let decision: IdempotencyDecision | undefined;
   if (idempotencyKey !== undefined) {
@@ -434,7 +426,8 @@ export async function handleChatCompletionStream(
       extensionId: OPENAI_EXTENSION_ID,
       targetId: target.id,
       endpoint: 'chat.completions',
-      input,
+      input: normalized.input,
+      ...(normalized.images.length === 0 ? {} : { images: normalized.images }),
       sessionMode: 'ephemeral',
       ...(outputSchema === null ? {} : { outputSchema }),
     });

@@ -175,6 +175,20 @@ describe('CodexProviderAdapter', () => {
     ]);
   });
 
+  it('passes staged image files through the native localImage input channel', async () => {
+    const h = harness('text');
+    await collect(h.adapter.start(request({
+      images: [{ path: '/tmp/staged-image.png', mediaType: 'image/png', detail: 'high' }],
+    })));
+
+    expect(findRequest(h, 'turn/start')?.params).toMatchObject({
+      input: [
+        { type: 'text', text: '<user>Say ok.</user>', text_elements: [] },
+        { type: 'localImage', path: '/tmp/staged-image.png', detail: 'high' },
+      ],
+    });
+  });
+
   it('starts persistent threads and resumes the exact native thread ID', async () => {
     const h = harness('text');
     await collect(h.adapter.start(request({ sessionMode: 'persistent' })));

@@ -56,11 +56,15 @@ let invocations: FakeInvocationService;
 let apiKey: string;
 let clientId: string;
 
-function createEnabledTarget(id = 'chat-model', aliases: string[] = ['chat-alias']): InvocationTarget {
+function createEnabledTarget(
+  id = 'chat-model',
+  aliases: string[] = ['chat-alias'],
+  cli = 'codex',
+): InvocationTarget {
   const target = targets.create({
     id,
     aliases,
-    cli: 'codex',
+    cli,
     nativeModel: 'gpt-5.6',
     reasoningEffort: 'max',
     isolationLevel: 'strict',
@@ -296,6 +300,47 @@ describe('POST /v1/chat/completions', () => {
     ]);
   });
 
+  it('accepts image_url parts and forwards ordered image references separately from text', async () => {
+    const response = await chat(requestBody({
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this' },
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,iVBORw0KGgo=', detail: 'high' },
+          },
+          { type: 'text', text: 'briefly.' },
+        ],
+      }],
+    }));
+
+    expect(response.statusCode).toBe(200);
+    expect(invocations.requests[0]).toEqual(expect.objectContaining({
+      input: [{ role: 'user', content: 'Describe this\n[Attached image #1]\nbriefly.' }],
+      images: [{ url: 'data:image/png;base64,iVBORw0KGgo=', detail: 'high' }],
+    }));
+  });
+
+  it('rejects image input for providers without a native image channel', async () => {
+    const target = createEnabledTarget('antigravity-text', [], 'antigravity');
+    grants.grant(clientId, 'openai', target.id);
+
+    const response = await chat(requestBody({
+      model: target.id,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'image_url',
+          image_url: { url: 'https://example.com/image.png' },
+        }],
+      }],
+    }));
+
+    expectOpenAIError(response, 400, 'image_input_not_supported', 'messages');
+    expect(invocations.requests).toHaveLength(0);
+  });
+
   it.each([
     ['unknown request', requestBody({ extra: true })],
     ['request', requestBody({ cwd: '/tmp/caller' })],
@@ -305,9 +350,9 @@ describe('POST /v1/chat/completions', () => {
     ['stored chat', requestBody({ store: true })],
     ['stream options', requestBody({ stream_options: { include_usage: true, extra: true } })],
     ['message', requestBody({ messages: [{ role: 'user', content: 'hello', extra: true }] })],
-    ['multimodal content', requestBody({ messages: [{
+    ['image content', requestBody({ messages: [{
       role: 'user',
-      content: [{ type: 'image_url', image_url: { url: 'https://example.invalid/image.png' } }],
+      content: [{ type: 'image_url', image_url: { url: 'https://example.invalid/image.png', extra: true } }],
     }] })],
     ['tool call', requestBody({ messages: [{
       role: 'assistant',

@@ -10,6 +10,10 @@ import {
   type CursorProviderAdapterOptions,
 } from './cursor/adapter.js';
 import {
+  KimiProviderAdapter,
+  type KimiProviderAdapterOptions,
+} from './kimi/adapter.js';
+import {
   OpenCodeProviderAdapter,
   type OpenCodeProviderAdapterOptions,
 } from './opencode/adapter.js';
@@ -24,6 +28,7 @@ export const BUILT_IN_PROVIDER_COMMANDS = {
   claude: 'claude',
   codex: 'codex',
   cursor: 'cursor-agent',
+  kimi: 'kimi',
   opencode: 'opencode',
 } as const;
 
@@ -32,12 +37,14 @@ export interface BuiltInProviderOptions {
   claude?: ClaudeOptions;
   codex?: CodexOptions;
   cursor?: CursorProviderAdapterOptions;
+  kimi?: KimiProviderAdapterOptions;
   opencode?: OpenCodeProviderAdapterOptions;
   factories?: Partial<{
     antigravity: (options: AntigravityProviderAdapterOptions | undefined) => ProviderAdapter;
     claude: (options: ClaudeOptions | undefined) => ProviderAdapter;
     codex: (options: CodexOptions | undefined) => ProviderAdapter;
     cursor: (options: CursorProviderAdapterOptions | undefined) => ProviderAdapter;
+    kimi: (options: KimiProviderAdapterOptions | undefined) => ProviderAdapter;
     opencode: (options: OpenCodeProviderAdapterOptions | undefined) => ProviderAdapter;
   }>;
 }
@@ -58,6 +65,10 @@ export function registerBuiltInProviders(
   registry.register(
     'cursor',
     (options.factories?.cursor ?? ((adapterOptions) => new CursorProviderAdapter(adapterOptions)))(options.cursor),
+  );
+  registry.register(
+    'kimi',
+    (options.factories?.kimi ?? ((adapterOptions) => new KimiProviderAdapter(adapterOptions)))(options.kimi),
   );
   registry.register(
     'opencode',

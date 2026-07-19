@@ -28,6 +28,7 @@ const cliLabels: Record<string, string> = {
   cursor: 'Cursor Agent',
   opencode: 'OpenCode',
   antigravity: 'Antigravity',
+  kimi: 'Kimi Code',
 };
 
 const maxConcurrencyPresets: NumberPreset[] = [

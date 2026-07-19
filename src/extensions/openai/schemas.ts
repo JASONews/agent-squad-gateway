@@ -10,6 +10,14 @@ const ChatTextContentPartSchema = z.object({
   text: z.string(),
 }).strict();
 
+const ChatImageUrlContentPartSchema = z.object({
+  type: z.literal('image_url'),
+  image_url: z.object({
+    url: z.string().min(1),
+    detail: z.enum(['auto', 'low', 'high']).optional(),
+  }).strict(),
+}).strict();
+
 const ChatTextContentSchema = z.union([
   z.string(),
   z.array(ChatTextContentPartSchema).min(1),
@@ -24,8 +32,19 @@ export const ChatToolCallSchema = z.object({
 }).strict();
 
 const TextMessageSchema = z.object({
-  role: z.enum(['system', 'user', 'assistant']),
+  role: z.enum(['system', 'assistant']),
   content: ChatTextContentSchema,
+}).strict();
+
+const UserMessageSchema = z.object({
+  role: z.literal('user'),
+  content: z.union([
+    z.string(),
+    z.array(z.union([
+      ChatTextContentPartSchema,
+      ChatImageUrlContentPartSchema,
+    ])).min(1),
+  ]),
 }).strict();
 
 const AssistantToolMessageSchema = z.object({
@@ -42,6 +61,7 @@ const ToolMessageSchema = z.object({
 
 export const ChatMessageSchema = z.union([
   TextMessageSchema,
+  UserMessageSchema,
   AssistantToolMessageSchema,
   ToolMessageSchema,
 ]);
@@ -105,8 +125,30 @@ export const ChatRequestSchema = z.object({
 }).strict();
 
 const ResponsesTextMessageSchema = z.object({
-  role: z.enum(['system', 'user', 'assistant']),
+  role: z.enum(['system', 'assistant']),
   content: z.string(),
+}).strict();
+
+const ResponsesInputTextPartSchema = z.object({
+  type: z.literal('input_text'),
+  text: z.string(),
+}).strict();
+
+const ResponsesInputImagePartSchema = z.object({
+  type: z.literal('input_image'),
+  image_url: z.string().min(1),
+  detail: z.enum(['auto', 'low', 'high']).optional(),
+}).strict();
+
+const ResponsesUserMessageSchema = z.object({
+  role: z.literal('user'),
+  content: z.union([
+    z.string(),
+    z.array(z.union([
+      ResponsesInputTextPartSchema,
+      ResponsesInputImagePartSchema,
+    ])).min(1),
+  ]),
 }).strict();
 
 const ResponsesFunctionCallSchema = z.object({
@@ -143,6 +185,7 @@ export const ResponsesRequestSchema = z.object({
     z.string(),
     z.array(z.union([
       ResponsesTextMessageSchema,
+      ResponsesUserMessageSchema,
       ResponsesFunctionCallSchema,
       ResponsesFunctionCallOutputSchema,
     ])).min(1),

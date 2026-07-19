@@ -1,7 +1,11 @@
 import type { FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { ProviderEvent } from '../../provider-runtime/types.js';
-import { normalizeOpenAIError, OpenAIError } from './errors.js';
+import {
+  normalizeOpenAIError,
+  OpenAIError,
+  providerFailureError,
+} from './errors.js';
 import {
   AdapterProtocolError,
   assignGatewayCallIds,
@@ -52,10 +56,6 @@ function protocolError(): OpenAIError {
     null,
     'adapter_protocol_error',
   );
-}
-
-function providerError(): OpenAIError {
-  return new OpenAIError(502, 'The provider could not complete the request', 'server_error', null, 'provider_error');
 }
 
 function cancelledError(): OpenAIError {
@@ -236,7 +236,9 @@ export async function writeChatStream(
           terminalSeen = true;
           break;
         case 'failed':
-          throw event.code === 'adapter_protocol_error' ? protocolError() : providerError();
+          throw event.code === 'adapter_protocol_error'
+            ? protocolError()
+            : providerFailureError(event.code, 'messages');
         case 'cancelled':
           throw cancelledError();
         default:
@@ -378,7 +380,9 @@ export async function writeResponsesStream(
           break;
         case 'failed':
           nativeStateAdvanced ||= event.nativeStateAdvanced;
-          throw event.code === 'adapter_protocol_error' ? protocolError() : providerError();
+          throw event.code === 'adapter_protocol_error'
+            ? protocolError()
+            : providerFailureError(event.code, 'input');
         case 'cancelled':
           throw cancelledError();
         default:

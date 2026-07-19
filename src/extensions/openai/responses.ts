@@ -13,7 +13,10 @@ import type {
 } from '../../control-plane/response-sessions.js';
 import type { TargetRepository } from '../../control-plane/targets.js';
 import type { InvocationTarget } from '../../control-plane/types.js';
-import type { ProviderInputItem } from '../../provider-runtime/types.js';
+import type {
+  ProviderImageSource,
+  ProviderInputItem,
+} from '../../provider-runtime/types.js';
 import type {
   InvocationServiceLike,
   ResponseWorkspaceLike,
@@ -21,9 +24,15 @@ import type {
 import {
   deserializeOpenAIReplay,
   OpenAIError,
+  providerFailureError,
   serializeOpenAIFailure,
   serializeOpenAISuccess,
 } from './errors.js';
+import {
+  assertImageInputSupported,
+  normalizeResponsesInput,
+  type NormalizedProviderInput,
+} from './image-input.js';
 import { OPENAI_EXTENSION_ID } from './models.js';
 import type { OpenAIRunAttempt } from './run-attempt.js';
 import {
@@ -36,7 +45,6 @@ import {
   assignGatewayCallIds,
   buildToolOutputSchema,
   FunctionCallMetadataStore,
-  normalizeResponsesToolRoundTrip,
   StructuredEnvelopeDecoder,
   ToolInputError,
   type DecodedEnvelope,
@@ -114,8 +122,8 @@ function protocolError(): OpenAIError {
   );
 }
 
-function providerError(): OpenAIError {
-  return new OpenAIError(502, 'The provider request failed', 'server_error', null, 'provider_error');
+function providerError(code = 'provider_error'): OpenAIError {
+  return providerFailureError(code, 'input');
 }
 
 function workspaceError(): OpenAIError {
@@ -206,13 +214,13 @@ function responseToolBridge(
   }
 }
 
-function inputItems(request: ResponsesRequest): ProviderInputItem[] {
+function inputItems(request: ResponsesRequest): NormalizedProviderInput {
   if (typeof request.input === 'string') {
     if (request.previous_response_id !== undefined) {
       const expected = responseCallMetadata.find(request.previous_response_id);
       if (expected && expected.size > 0) throw invalidRequest();
     }
-    return [{ role: 'user', content: request.input }];
+    return normalizeResponsesInput(request);
   }
   try {
     const hasOutputs = request.input.some((item) => 'type' in item && item.type === 'function_call_output');
@@ -222,7 +230,7 @@ function inputItems(request: ResponsesRequest): ProviderInputItem[] {
         ? responseCallMetadata.expected(request.previous_response_id)
         : responseCallMetadata.find(request.previous_response_id);
     if (!hasOutputs && expected && expected.size > 0) throw invalidRequest();
-    return normalizeResponsesToolRoundTrip(request.input, expected && expected.size > 0 ? expected : undefined);
+    return normalizeResponsesInput(request, expected && expected.size > 0 ? expected : undefined);
   } catch (error) {
     if (error instanceof ToolInputError) throw invalidRequest();
     throw error;
@@ -268,7 +276,7 @@ async function collectInvocation(
         case 'failed':
           nativeStateAdvanced ||= event.nativeStateAdvanced;
           if (event.code === 'adapter_protocol_error') throw protocolError();
-          throw providerError();
+          throw providerError(event.code);
         case 'cancelled':
           throw new OpenAIError(
             500,
@@ -369,6 +377,7 @@ async function executeResponse(
   target: InvocationTarget,
   responseId: string,
   input: ProviderInputItem[],
+  images: ProviderImageSource[],
   outputSchema: ToolOutputSchema | null,
   deps: ResponsesDependencies,
   runId?: string,
@@ -408,6 +417,7 @@ async function executeResponse(
         endpoint: 'responses',
         responseId,
         input,
+        ...(images.length === 0 ? {} : { images }),
         sessionMode: parent === undefined && !stored ? 'ephemeral' : 'persistent',
         ...(outputSchema === null ? {} : { outputSchema }),
         ...(workspacePath === undefined ? {} : { workspacePath }),
@@ -489,7 +499,8 @@ export async function handleResponse(
   const request = parseRequest(body);
   const target = authorizeTarget(clientId, request.model, deps, attempt);
   const outputSchema = responseToolBridge(request, target.toolBridge);
-  const input = inputItems(request);
+  const normalized = inputItems(request);
+  assertImageInputSupported(target.cli, normalized.images, 'input');
   const responseId = `resp_${randomUUID()}`;
   attempt.setResponseId(responseId);
   if (idempotencyKey === undefined) {
@@ -498,7 +509,8 @@ export async function handleResponse(
       request,
       target,
       responseId,
-      input,
+      normalized.input,
+      normalized.images,
       outputSchema,
       deps,
       attempt.reserve(),
@@ -552,7 +564,8 @@ export async function handleResponse(
       request,
       target,
       responseId,
-      input,
+      normalized.input,
+      normalized.images,
       outputSchema,
       deps,
       decision.runId,
@@ -642,6 +655,7 @@ async function executeResponseStream(
   responseId: string,
   outputId: string,
   input: ProviderInputItem[],
+  images: ProviderImageSource[],
   outputSchema: ToolOutputSchema | null,
   deps: ResponsesDependencies,
   runId?: string,
@@ -698,6 +712,7 @@ async function executeResponseStream(
         endpoint: 'responses',
         responseId,
         input,
+        ...(images.length === 0 ? {} : { images }),
         sessionMode: parent === undefined && !stored ? 'ephemeral' : 'persistent',
         ...(outputSchema === null ? {} : { outputSchema }),
         ...(workspacePath === undefined ? {} : { workspacePath }),
@@ -807,7 +822,8 @@ export async function handleResponseStream(
   const request = parseRequest(body);
   const target = authorizeTarget(clientId, request.model, deps, attempt);
   const outputSchema = responseToolBridge(request, target.toolBridge);
-  const input = inputItems(request);
+  const normalized = inputItems(request);
+  assertImageInputSupported(target.cli, normalized.images, 'input');
   const responseId = `resp_${randomUUID()}`;
   attempt.setResponseId(responseId);
   const outputId = `msg_${randomUUID()}`;
@@ -882,7 +898,8 @@ export async function handleResponseStream(
       target,
       responseId,
       outputId,
-      input,
+      normalized.input,
+      normalized.images,
       outputSchema,
       deps,
       decision?.type === 'owner' ? decision.runId : attempt.reserve(),

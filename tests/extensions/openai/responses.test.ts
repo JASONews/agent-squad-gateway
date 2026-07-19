@@ -90,11 +90,15 @@ let workspaces: FakeResponseWorkspaces;
 let apiKey: string;
 let clientId: string;
 
-function createEnabledTarget(id = 'responses-model', aliases: string[] = ['responses-alias']): InvocationTarget {
+function createEnabledTarget(
+  id = 'responses-model',
+  aliases: string[] = ['responses-alias'],
+  cli = 'codex',
+): InvocationTarget {
   targets.create({
     id,
     aliases,
-    cli: 'codex',
+    cli,
     nativeModel: 'gpt-5.6',
     reasoningEffort: 'max',
     isolationLevel: 'strict',
@@ -276,6 +280,47 @@ describe('POST /v1/responses', () => {
     ]);
   });
 
+  it('accepts input_image parts and forwards ordered image references separately from text', async () => {
+    const response = await respond(requestBody({
+      input: [{
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Compare' },
+          { type: 'input_image', image_url: 'https://example.com/one.png', detail: 'low' },
+          { type: 'input_image', image_url: 'data:image/png;base64,iVBORw0KGgo=' },
+        ],
+      }],
+    }));
+
+    expect(response.statusCode).toBe(200);
+    expect(invocations.requests[0]).toEqual(expect.objectContaining({
+      input: [{
+        role: 'user',
+        content: 'Compare\n[Attached image #1]\n\n[Attached image #2]\n',
+      }],
+      images: [
+        { url: 'https://example.com/one.png', detail: 'low' },
+        { url: 'data:image/png;base64,iVBORw0KGgo=', detail: 'auto' },
+      ],
+    }));
+  });
+
+  it('rejects image input for providers without a native image channel', async () => {
+    const target = createEnabledTarget('cursor-text', [], 'cursor');
+    grants.grant(clientId, 'openai', target.id);
+
+    const response = await respond(requestBody({
+      model: target.id,
+      input: [{
+        role: 'user',
+        content: [{ type: 'input_image', image_url: 'https://example.com/image.png' }],
+      }],
+    }));
+
+    expectOpenAIError(response, 400, 'image_input_not_supported', 'input');
+    expect(invocations.requests).toHaveLength(0);
+  });
+
   it.each([
     ['unknown request field', requestBody({ extra: true })],
     ['cwd', requestBody({ cwd: '/tmp/caller' })],
@@ -284,7 +329,10 @@ describe('POST /v1/responses', () => {
     ['empty messages', requestBody({ input: [] })],
     ['unknown message field', requestBody({ input: [{ role: 'user', content: 'Hi', extra: true }] })],
     ['unsupported role', requestBody({ input: [{ role: 'tool', content: 'Hi' }] })],
-    ['multimodal content', requestBody({ input: [{ role: 'user', content: [{ type: 'input_text', text: 'Hi' }] }] })],
+    ['image content', requestBody({ input: [{
+      role: 'user',
+      content: [{ type: 'input_image', image_url: 'https://example.com/image.png', extra: true }],
+    }] })],
   ])('rejects %s before scheduling', async (_name, body) => {
     const response = await respond(body);
     expectOpenAIError(response, 400, 'invalid_request');

@@ -166,6 +166,23 @@ describe('OpenCodeProviderAdapter', () => {
     expect(fake.promptOptions[0]?.signal).toBe(fake.subscribeOptions[0]?.signal);
   });
 
+  it('passes staged images as native SDK file parts', async () => {
+    const { adapter, fake } = harness();
+    await collect(adapter.start(request({
+      images: [{ path: '/tmp/staged image.webp', mediaType: 'image/webp', detail: 'low' }],
+    })));
+
+    expect(fake.prompts[0]?.parts).toEqual([
+      { type: 'text', text: '<user>Say hello.</user>' },
+      {
+        type: 'file',
+        mime: 'image/webp',
+        filename: 'staged image.webp',
+        url: 'file:///tmp/staged%20image.webp',
+      },
+    ]);
+  });
+
   it('uses the generated JSON schema format and final assistant structured output', async () => {
     const { adapter, fake } = harness();
 

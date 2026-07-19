@@ -50,6 +50,30 @@ export function normalizeOpenAIError(error: unknown): OpenAIError {
     : new OpenAIError(500, 'The server encountered an internal error', 'server_error', null, 'internal_error');
 }
 
+export function providerFailureError(
+  code: string,
+  param: 'messages' | 'input',
+): OpenAIError {
+  switch (code) {
+    case 'image_input_invalid':
+      return new OpenAIError(400, 'Invalid image input', 'invalid_request_error', param, code);
+    case 'image_input_not_supported':
+      return new OpenAIError(400, 'The selected model does not support image input', 'invalid_request_error', param, code);
+    case 'image_limit_exceeded':
+      return new OpenAIError(413, 'The image input limit was exceeded', 'invalid_request_error', param, code);
+    case 'image_too_large':
+      return new OpenAIError(413, 'An input image is too large', 'invalid_request_error', param, code);
+    case 'image_fetch_failed':
+      return new OpenAIError(400, 'An input image could not be fetched', 'invalid_request_error', param, code);
+    case 'image_fetch_timeout':
+      return new OpenAIError(504, 'Fetching an input image timed out', 'server_error', param, code);
+    case 'image_cleanup_failed':
+      return new OpenAIError(500, 'Image input cleanup failed', 'server_error', null, code);
+    default:
+      return new OpenAIError(502, 'The provider could not complete the request', 'server_error', null, 'provider_error');
+  }
+}
+
 export function serializeOpenAISuccess<T>(value: T): string {
   return JSON.stringify({ ok: true, value } satisfies OpenAIReplayEnvelope<T>);
 }

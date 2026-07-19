@@ -79,6 +79,7 @@ describe('built-in provider registration', () => {
       claude: new StaticProbeAdapter(staticCapabilities()),
       codex: new StaticProbeAdapter(staticCapabilities()),
       cursor: new StaticProbeAdapter(staticCapabilities()),
+      kimi: new StaticProbeAdapter(staticCapabilities()),
       opencode: new StaticProbeAdapter(staticCapabilities()),
     };
     registerBuiltInProviders(registry, {
@@ -87,6 +88,7 @@ describe('built-in provider registration', () => {
         claude: () => adapters.claude,
         codex: () => adapters.codex,
         cursor: () => adapters.cursor,
+        kimi: () => adapters.kimi,
         opencode: () => adapters.opencode,
       },
     });
@@ -97,9 +99,10 @@ describe('built-in provider registration', () => {
     try {
       const availability = await new CapabilityService(registry, targets, workspaces).scanInstalled();
 
-      expect(registry.list()).toEqual(['antigravity', 'claude', 'codex', 'cursor', 'opencode']);
+      expect(registry.list()).toEqual(['antigravity', 'claude', 'codex', 'cursor', 'kimi', 'opencode']);
       expect(availability.map((entry) => entry.cli)).toEqual(registry.list());
       expect(Object.values(adapters).flatMap((adapter) => adapter.calls)).toEqual([
+        { mode: 'static' },
         { mode: 'static' },
         { mode: 'static' },
         { mode: 'static' },
@@ -133,6 +136,7 @@ describe('built-in provider registration', () => {
       }),
       codex: new StaticProbeAdapter({ ...staticCapabilities(), version: '2.0.0' }),
       cursor: new StaticProbeAdapter(staticCapabilities()),
+      kimi: new StaticProbeAdapter(staticCapabilities()),
       opencode: new StaticProbeAdapter(staticCapabilities()),
     };
     registerBuiltInProviders(registry, {
@@ -141,6 +145,7 @@ describe('built-in provider registration', () => {
         claude: () => adapters.claude,
         codex: () => adapters.codex,
         cursor: () => adapters.cursor,
+        kimi: () => adapters.kimi,
         opencode: () => adapters.opencode,
       },
     });
@@ -199,7 +204,7 @@ describe('built-in provider registration', () => {
 
       expect(lifecycle.slice(0, 3)).toEqual(['reconcile', 'sweep', 'retention-start']);
       expect(Object.values(adapters).flatMap((adapter) => adapter.calls))
-        .toEqual(Array.from({ length: 5 }, () => ({ mode: 'static' })));
+        .toEqual(Array.from({ length: 6 }, () => ({ mode: 'static' })));
       expect(capabilityService.listAvailability()).toEqual(expect.arrayContaining([
         expect.objectContaining({ cli: 'claude', capabilities: expect.objectContaining({ available: false }) }),
       ]));
@@ -260,6 +265,7 @@ describe('built-in provider registration', () => {
         claude: () => new StaticProbeAdapter(staticCapabilities()),
         codex: () => new StaticProbeAdapter(staticCapabilities(), () => { events.push('codex-close'); }),
         cursor: () => new StaticProbeAdapter(staticCapabilities(), () => { events.push('cursor-close'); }),
+        kimi: () => new StaticProbeAdapter(staticCapabilities(), () => { events.push('kimi-close'); }),
         opencode: () => new StaticProbeAdapter(staticCapabilities(), () => { events.push('opencode-close'); }),
       },
     });
@@ -302,6 +308,7 @@ describe('built-in provider registration', () => {
         'abort-runs',
         'codex-close',
         'cursor-close',
+        'kimi-close',
         'opencode-close',
         'retention-stop',
       ]);
@@ -348,6 +355,7 @@ describe('built-in provider registration', () => {
       claude: new StaticProbeAdapter(staticCapabilities()),
       codex: new StaticProbeAdapter({ ...staticCapabilities(), version: '2.0.0' }),
       cursor: new StaticProbeAdapter(staticCapabilities()),
+      kimi: new StaticProbeAdapter(staticCapabilities()),
       opencode: new StaticProbeAdapter(staticCapabilities()),
     };
     registerBuiltInProviders(registry, {
@@ -356,6 +364,7 @@ describe('built-in provider registration', () => {
         claude: () => adapters.claude,
         codex: () => adapters.codex,
         cursor: () => adapters.cursor,
+        kimi: () => adapters.kimi,
         opencode: () => adapters.opencode,
       },
     });
@@ -371,7 +380,7 @@ describe('built-in provider registration', () => {
       });
 
       expect(Object.values(adapters).flatMap((adapter) => adapter.calls))
-        .toEqual(Array.from({ length: 5 }, () => ({ mode: 'static' })));
+        .toEqual(Array.from({ length: 6 }, () => ({ mode: 'static' })));
       expect(report.core).toBe('unreachable');
       expect(report.providers).toEqual(expect.arrayContaining([
         expect.objectContaining({

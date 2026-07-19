@@ -9,6 +9,19 @@ export type ProviderInputItem =
   | { role: 'assistant'; content: string|null; toolCalls: ProviderInputToolCall[] }
   | { role: 'tool'; toolCallId: string; content: string };
 
+export type ProviderImageDetail = 'auto' | 'low' | 'high';
+
+export interface ProviderImageSource {
+  url: string;
+  detail: ProviderImageDetail;
+}
+
+export interface ProviderImageAsset {
+  path: string;
+  mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  detail: ProviderImageDetail;
+}
+
 export interface ProviderModelOption { id: string; label: string; effortOptions: string[] | null }
 
 export type ProviderProbeRequest =
@@ -46,6 +59,7 @@ export interface ProviderRequest {
   effort: string | null;
   workspace: string;
   input: ProviderInputItem[];
+  images?: ProviderImageAsset[];
   sessionMode: 'ephemeral' | 'persistent';
   runTimeoutMs: number | null;
   outputSchema: Record<string, unknown> | null;

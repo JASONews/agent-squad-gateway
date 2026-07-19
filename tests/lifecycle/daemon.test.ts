@@ -55,6 +55,7 @@ function staticDoctorProviders(): ProviderRegistry {
       claude: adapter,
       codex: adapter,
       cursor: adapter,
+      kimi: adapter,
       opencode: adapter,
     },
   });
@@ -495,7 +496,7 @@ describe('Gateway lifecycle', () => {
       database: 'reachable',
       core: 'reachable',
     });
-    expect(report.providers).toHaveLength(5);
+    expect(report.providers).toHaveLength(6);
     expect(fs.readFileSync(config.paths.dbPath)).toEqual(before);
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:29999/v1/health');
     expect(output.mock.calls.flat().join('\n')).not.toContain(Buffer.alloc(32, 1).toString('base64url'));

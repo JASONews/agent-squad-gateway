@@ -4,9 +4,17 @@ import { hasCurrentCompatibleCapability, type TargetRepository } from '../contro
 import type { InvocationTarget, RunRecord } from '../control-plane/types.js';
 import type { ProviderRegistry } from './registry.js';
 import type { TargetScheduler } from './scheduler.js';
+import {
+  ImageAssetError,
+  ImageAssetMaterializer,
+  type ImageAssetLease,
+  type ImageAssetMaterializerLike,
+} from './image-assets.js';
+import { providerSupportsImageInput } from './image-support.js';
 import type {
   ProviderAdapter,
   ProviderEvent,
+  ProviderImageSource,
   ProviderInputItem,
   ProviderRequest,
   ProviderResumeRequest,
@@ -46,6 +54,7 @@ export interface InvocationRequest {
   endpoint: string;
   responseId?: string | null;
   input: ProviderInputItem[];
+  images?: ProviderImageSource[];
   sessionMode: 'ephemeral' | 'persistent';
   outputSchema?: Record<string, unknown> | null;
   nativeSessionId?: string;
@@ -238,6 +247,7 @@ export class InvocationService {
     private readonly workspaces: Workspaces,
     private readonly targets: Targets,
     private readonly runs: Runs,
+    private readonly imageAssets: ImageAssetMaterializerLike = new ImageAssetMaterializer(),
   ) {}
 
   invoke(request: InvocationRequest): AsyncIterable<ProviderEvent> {
@@ -309,12 +319,19 @@ export class InvocationService {
         this.runs.markStarted(run.id);
         started = true;
         let lease: WorkspaceLease | undefined;
+        let imageLease: ImageAssetLease | undefined;
         let terminal: ProviderEvent;
         try {
           lease = await this.acquireWorkspace(request, target, run.id);
+          if ((request.images?.length ?? 0) > 0) {
+            if (!providerSupportsImageInput(target.cli)) {
+              throw new ImageAssetError('image_input_not_supported');
+            }
+            imageLease = await this.imageAssets.materialize(request.images!, signal);
+          }
           terminal = await this.iterateProvider(
             adapter,
-            this.providerRequest(request, target, run.id, lease.path, signal),
+            this.providerRequest(request, target, run.id, lease.path, signal, imageLease?.images),
             channel,
             signal,
             (advanced) => { nativeStateAdvanced = advanced; },
@@ -323,6 +340,21 @@ export class InvocationService {
           terminal = error instanceof AdapterProtocolError
             ? protocolFailure(nativeStateAdvanced)
             : thrownFailure(error, signal, nativeStateAdvanced);
+        }
+
+        if (imageLease) {
+          try {
+            await imageLease.release();
+          } catch {
+            if (terminal.type !== 'cancelled') {
+              terminal = {
+                type: 'failed',
+                code: 'image_cleanup_failed',
+                message: 'Image input cleanup failed',
+                nativeStateAdvanced,
+              };
+            }
+          }
         }
 
         if (lease) {
@@ -457,6 +489,7 @@ export class InvocationService {
     runId: string,
     workspace: string,
     signal: AbortSignal,
+    images?: ProviderRequest['images'],
   ): ProviderRequest | ProviderResumeRequest {
     const providerRequest: ProviderRequest = {
       runId,
@@ -465,6 +498,7 @@ export class InvocationService {
       effort: target.reasoningEffort,
       workspace,
       input: request.input,
+      ...(images === undefined ? {} : { images }),
       sessionMode: request.sessionMode,
       runTimeoutMs: target.runTimeoutMs,
       outputSchema: request.outputSchema ?? null,

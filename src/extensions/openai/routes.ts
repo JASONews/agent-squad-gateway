@@ -8,6 +8,8 @@ import { listOpenAIModels, OPENAI_EXTENSION_ID } from './models.js';
 import { handleResponse, handleResponseStream } from './responses.js';
 import { OpenAIRunAttempt } from './run-attempt.js';
 
+const OPENAI_MULTIMODAL_BODY_LIMIT = 40 * 1024 * 1024;
+
 function requestsStream(body: unknown): boolean {
   return typeof body === 'object' && body !== null && 'stream' in body && body.stream === true;
 }
@@ -55,7 +57,7 @@ function registerRoutes(app: FastifyInstance, context: ExtensionContext): void {
     return reply.send(listOpenAIModels(request.openAIClient.clientId, context));
   });
 
-  app.post('/chat/completions', async (request, reply) => {
+  app.post('/chat/completions', { bodyLimit: OPENAI_MULTIMODAL_BODY_LIMIT }, async (request, reply) => {
     if (!request.openAIClient) {
       throw new OpenAIError(401, 'Invalid authentication credentials', 'invalid_request_error', null, 'invalid_api_key');
     }
@@ -79,7 +81,7 @@ function registerRoutes(app: FastifyInstance, context: ExtensionContext): void {
     return reply.send(completion);
   });
 
-  app.post('/responses', async (request, reply) => {
+  app.post('/responses', { bodyLimit: OPENAI_MULTIMODAL_BODY_LIMIT }, async (request, reply) => {
     if (!request.openAIClient) {
       throw new OpenAIError(401, 'Invalid authentication credentials', 'invalid_request_error', null, 'invalid_api_key');
     }

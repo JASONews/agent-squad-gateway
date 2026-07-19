@@ -149,4 +149,51 @@ describe('managed process', () => {
       message: 'adapter_spawn_failed',
     });
   });
+
+  it('cleans up descendants after the process-group leader has exited', async () => {
+    if (process.platform === 'win32') return;
+    const dir = mkdtempSync(join(tmpdir(), 'asq-managed-descendant-'));
+    const pidPath = join(dir, 'descendant.pid');
+    const script = [
+      "const fs = require('node:fs')",
+      "const { spawn } = require('node:child_process')",
+      'const path = process.argv[1]',
+      "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })",
+      'fs.writeFileSync(path, String(child.pid))',
+      'child.unref()',
+    ].join(';');
+    const managed = spawnManagedProcess({
+      command: process.execPath,
+      args: ['-e', script, pidPath],
+      cwd: dir,
+    });
+
+    try {
+      await managed.exited;
+      const pid = Number(readFileSync(pidPath, 'utf8'));
+      await managed.dispose();
+      await expectProcessMissing(pid);
+    } finally {
+      await managed.dispose();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
+
+async function expectProcessMissing(pid: number): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return;
+      throw error;
+    }
+    await delay(25);
+  }
+  process.kill(pid, 'SIGKILL');
+  throw new Error(`descendant process ${pid} survived managed-process cleanup`);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

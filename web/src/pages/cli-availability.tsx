@@ -8,7 +8,7 @@ import { IconButton } from '../components/button.js';
 import { DataTable, type DataTableColumn } from '../components/data-table.js';
 
 const cliNames: Record<string, string> = {
-  codex: 'Codex', claude: 'Claude Code', cursor: 'Cursor Agent', opencode: 'OpenCode', antigravity: 'Antigravity',
+  codex: 'Codex', claude: 'Claude Code', cursor: 'Cursor Agent', kimi: 'Kimi Code', opencode: 'OpenCode', antigravity: 'Antigravity',
 };
 
 function ceiling(item: CliAvailability, t: Translate): string {

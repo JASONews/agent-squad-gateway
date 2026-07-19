@@ -264,7 +264,14 @@ export class CodexProviderAdapter implements ProviderAdapter {
       notifications = client.subscribeNotifications();
       const turn = parseTurnResult(await client.request<CodexTurnResult>('turn/start', {
         threadId,
-        input: [{ type: 'text', text: renderProviderInput(request.input), text_elements: [] }],
+        input: [
+          { type: 'text', text: renderProviderInput(request.input), text_elements: [] },
+          ...(request.images ?? []).map((image) => ({
+            type: 'localImage',
+            path: image.path,
+            detail: image.detail,
+          })),
+        ],
         model: request.model,
         effort: request.effort,
         environments: [],

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,6 +166,42 @@ describe('ClaudeProviderAdapter', () => {
       args: h.specs[0]?.args,
       stdin: renderProviderInput(providerRequest.input),
     }]);
+  });
+
+  it('uses stream-json input with native base64 image blocks', async () => {
+    const h = harness();
+    const directory = mkdtempSync(join(tmpdir(), 'asq-claude-image-'));
+    cleanups.push(async () => { rmSync(directory, { recursive: true, force: true }); });
+    const imagePath = join(directory, 'image.png');
+    const imageData = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    writeFileSync(imagePath, imageData);
+
+    await collect(h.adapter.start(request({
+      images: [{ path: imagePath, mediaType: 'image/png', detail: 'auto' }],
+    })));
+
+    const args = h.specs[0]!.args;
+    expect(args.slice(args.indexOf('--input-format'), args.indexOf('--input-format') + 2))
+      .toEqual(['--input-format', 'stream-json']);
+    const payload = JSON.parse(h.invocations()[0]!.stdin.trim()) as Record<string, unknown>;
+    expect(payload).toEqual({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: '<user>Say hello.</user>' },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: imageData.toString('base64'),
+            },
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+    });
   });
 
   it('uses a fresh persistent print process and resumes the exact native session', async () => {
