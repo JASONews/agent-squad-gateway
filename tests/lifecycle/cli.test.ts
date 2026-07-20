@@ -1,8 +1,28 @@
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { createGatewayProgram } from '../../src/bin/agent-squad-gateway.js';
+import {
+  createGatewayProgram,
+  isGatewayEntrypoint,
+} from '../../src/bin/agent-squad-gateway.js';
 import { AGENT_SQUAD_GATEWAY_VERSION } from '../../src/version.js';
 
 describe('Gateway CLI', () => {
+  it('recognizes an npm-style symlink as the executable entrypoint', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-squad-gateway-entrypoint-'));
+    const modulePath = fileURLToPath(new URL('../../src/bin/agent-squad-gateway.ts', import.meta.url));
+    const executablePath = join(directory, 'agent-squad-gateway');
+
+    try {
+      symlinkSync(modulePath, executablePath);
+      expect(isGatewayEntrypoint(pathToFileURL(modulePath).href, executablePath)).toBe(true);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('exposes independent lifecycle commands and forwards start foreground mode', async () => {
     const start = vi.fn(async () => {});
     const stop = vi.fn(async () => {});

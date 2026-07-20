@@ -1,6 +1,6 @@
 {
   "name": "@jasonews/agent-squad-gateway",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Local control plane and OpenAI-compatible API gateway for coding CLI models.",
   "license": "MIT",
   "type": "module",

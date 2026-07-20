@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { Command, Option } from 'commander';
+import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { Command, Option } from 'commander';
 import type { GatewayWebUiAuthMode } from '../config/config.js';
 import { AGENT_SQUAD_GATEWAY_VERSION } from '../version.js';
 import {
@@ -80,7 +81,16 @@ function addEndpointOptions(command: Command): Command {
       .argParser(Number));
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+export function isGatewayEntrypoint(moduleUrl: string, argvPath: string | undefined): boolean {
+  if (!argvPath) return false;
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(argvPath);
+  } catch {
+    return false;
+  }
+}
+
+if (isGatewayEntrypoint(import.meta.url, process.argv[1])) {
   void createGatewayProgram().parseAsync(process.argv).catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
