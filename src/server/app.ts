@@ -32,6 +32,7 @@ import { VITE_DEV_ORIGIN } from './auth-hooks.js';
 import { registerCoreRoutes } from './core-routes.js';
 import { sendGatewayError } from './errors.js';
 import { registerUiRoutes } from './ui-routes.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../version.js';
 
 export interface GatewayAppDependencies {
   config: GatewayConfig;
@@ -170,9 +171,9 @@ export function buildGatewayApp(deps: GatewayAppDependencies): FastifyInstance {
   app.get('/health', async (_request, reply) => {
     try {
       deps.db.prepare<[], { probe: number }>('SELECT 1 AS probe').get();
-      return reply.send({ ok: true, version: '0.1.0', db_ok: true, core_url: deps.config.coreUrl });
+      return reply.send({ ok: true, version: AGENT_SQUAD_GATEWAY_VERSION, db_ok: true, core_url: deps.config.coreUrl });
     } catch {
-      return reply.code(503).send({ ok: false, version: '0.1.0', db_ok: false, core_url: deps.config.coreUrl });
+      return reply.code(503).send({ ok: false, version: AGENT_SQUAD_GATEWAY_VERSION, db_ok: false, core_url: deps.config.coreUrl });
     }
   });
 

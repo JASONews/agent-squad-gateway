@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createGatewayProgram } from '../../src/bin/agent-squad-gateway.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../../src/version.js';
 
 describe('Gateway CLI', () => {
   it('exposes independent lifecycle commands and forwards start foreground mode', async () => {
@@ -10,6 +11,7 @@ describe('Gateway CLI', () => {
     const doctor = vi.fn(async () => {});
     const program = createGatewayProgram({ start, stop, status, open, doctor });
 
+    expect(program.version()).toBe(AGENT_SQUAD_GATEWAY_VERSION);
     expect(program.commands.map((command) => command.name())).toEqual(['start', 'stop', 'status', 'open', 'doctor']);
     expect(program.commands.find((command) => command.name() === 'start')!.helpInformation())
       .toContain('agent-squad-gateway start [options]');

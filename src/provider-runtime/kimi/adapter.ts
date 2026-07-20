@@ -29,6 +29,7 @@ import type {
   ProviderRequest,
   ProviderResumeRequest,
 } from '../types.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../../version.js';
 
 const COMMAND_OUTPUT_LIMIT_BYTES = 64 * 1024;
 const DEFAULT_EFFORT_OPTIONS = ['off', 'on'];
@@ -475,7 +476,7 @@ export class KimiProviderAdapter implements ProviderAdapter {
           clientInfo: {
             name: 'agent-squad-gateway',
             title: 'Agent Squad Gateway',
-            version: '0.1.0',
+            version: AGENT_SQUAD_GATEWAY_VERSION,
           },
         }, { cancellationSignal: request.signal });
         this.validateInitialize(init, request);

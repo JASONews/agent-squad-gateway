@@ -15,6 +15,7 @@ import type {
   ProviderRequest,
   ProviderResumeRequest,
 } from '../../src/provider-runtime/types.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../../src/version.js';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/fake-clis/codex-app-server.mjs');
 const TOOL_ENVELOPE_SCHEMA = {
@@ -134,7 +135,11 @@ describe('CodexProviderAdapter', () => {
       id: 1,
       method: 'initialize',
       params: {
-        clientInfo: { name: 'agent-squad-gateway', title: 'agent-squad-gateway', version: '0.1.0' },
+        clientInfo: {
+          name: 'agent-squad-gateway',
+          title: 'agent-squad-gateway',
+          version: AGENT_SQUAD_GATEWAY_VERSION,
+        },
         capabilities: {
           experimentalApi: true,
           requestAttestation: false,
@@ -297,7 +302,11 @@ describe('CodexProviderAdapter', () => {
     });
     const client = new CodexJsonRpcClient(managed);
     await client.request('initialize', {
-      clientInfo: { name: 'agent-squad-gateway', title: 'agent-squad-gateway', version: '0.1.0' },
+      clientInfo: {
+        name: 'agent-squad-gateway',
+        title: 'agent-squad-gateway',
+        version: AGENT_SQUAD_GATEWAY_VERSION,
+      },
       capabilities: { experimentalApi: true, requestAttestation: false },
     });
     client.notify('initialized');

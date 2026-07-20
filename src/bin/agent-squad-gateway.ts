@@ -2,6 +2,7 @@
 import { Command, Option } from 'commander';
 import { fileURLToPath } from 'node:url';
 import type { GatewayWebUiAuthMode } from '../config/config.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../version.js';
 import {
   doctorGateway,
   openGateway,
@@ -39,7 +40,7 @@ export function createGatewayProgram(actions: GatewayCliActions = defaultActions
   program
     .name('agent-squad-gateway')
     .description('Local Agent Squad Gateway')
-    .version('0.1.0');
+    .version(AGENT_SQUAD_GATEWAY_VERSION);
 
   addEndpointOptions(program.command('start')
     .option('--foreground', 'run in the foreground'))

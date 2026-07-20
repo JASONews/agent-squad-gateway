@@ -7,6 +7,7 @@ import { OpenAIError, sendOpenAIError } from './errors.js';
 import { listOpenAIModels, OPENAI_EXTENSION_ID } from './models.js';
 import { handleResponse, handleResponseStream } from './responses.js';
 import { OpenAIRunAttempt } from './run-attempt.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../../version.js';
 
 const OPENAI_MULTIMODAL_BODY_LIMIT = 40 * 1024 * 1024;
 
@@ -110,7 +111,7 @@ export const openAIExtension: GatewayExtension = {
   manifest: {
     id: OPENAI_EXTENSION_ID,
     version: '1.0.0',
-    requiredGatewayVersion: '0.1.0',
+    requiredGatewayVersion: AGENT_SQUAD_GATEWAY_VERSION,
   },
   register(context) {
     context.app.register(async (app) => registerRoutes(app, context), { prefix: '/v1' });

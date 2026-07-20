@@ -16,6 +16,7 @@ import { CapabilityService } from '../../src/provider-runtime/capability-service
 import { AdminAuthService } from '../../src/security/admin-auth.js';
 import { ensureSecretFile } from '../../src/security/secret-files.js';
 import { buildGatewayApp, type GatewayAppDependencies } from '../../src/server/app.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../../src/version.js';
 
 const ADMIN_SECRET_BYTES = Buffer.from('local-admin-secret');
 const ADMIN_SECRET = ADMIN_SECRET_BYTES.toString('base64url');
@@ -444,7 +445,7 @@ describe('Gateway control-plane admin API', () => {
     expect(response.statusCode).toBe(200);
     expect(json(response)).toEqual({
       ok: true,
-      version: '0.1.0',
+      version: AGENT_SQUAD_GATEWAY_VERSION,
       db_ok: true,
       core_url: 'http://127.0.0.1:28771',
     });
@@ -462,7 +463,7 @@ describe('Gateway control-plane admin API', () => {
       expect(response.statusCode).toBe(503);
       expect(json(response)).toEqual({
         ok: false,
-        version: '0.1.0',
+        version: AGENT_SQUAD_GATEWAY_VERSION,
         db_ok: false,
         core_url: 'http://127.0.0.1:28771',
       });

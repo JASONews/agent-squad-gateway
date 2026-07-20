@@ -29,11 +29,12 @@ import {
   type CodexThreadResult,
   type CodexTurnResult,
 } from './protocol.js';
+import { AGENT_SQUAD_GATEWAY_VERSION } from '../../version.js';
 
 const CLIENT_INFO = {
   name: 'agent-squad-gateway',
   title: 'agent-squad-gateway',
-  version: '0.1.0',
+  version: AGENT_SQUAD_GATEWAY_VERSION,
 } as const;
 const INTERRUPT_TIMEOUT_MS = 2_000;
 const COMMAND_OUTPUT_LIMIT_BYTES = 64 * 1024;
