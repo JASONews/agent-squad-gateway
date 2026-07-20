@@ -17,7 +17,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "bin": {
-    "agent-squad-gateway": "./dist/bin/agent-squad-gateway.js"
+    "agent-squad-gateway": "dist/bin/agent-squad-gateway.js"
   },
   "files": [
     "dist/",
