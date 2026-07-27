@@ -1,5 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
+const webExecArgv = Number.parseInt(process.versions.node, 10) >= 22
+  ? ['--no-experimental-webstorage']
+  : [];
+
 export default defineConfig({
   test: {
     projects: [
@@ -17,6 +21,7 @@ export default defineConfig({
           include: ['tests/web/**/*.test.tsx'],
           environment: 'jsdom',
           setupFiles: ['./web/src/test/setup.ts'],
+          execArgv: webExecArgv,
         },
       },
     ],

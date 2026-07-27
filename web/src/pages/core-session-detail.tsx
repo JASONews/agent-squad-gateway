@@ -121,7 +121,7 @@ export function CoreSessionDetailPage({ sessionId }: CoreSessionDetailPageProps)
   const { t } = useI18n();
   const isMobile = useMediaQuery(MOBILE_DETAIL_QUERY);
   const [activePanel, setActivePanel] = useState<DetailPanel>('messages');
-  const [rawTail, setRawTail] = useState<CoreSubagent | null>(null);
+  const [rawTailSubagentId, setRawTailSubagentId] = useState<string | null>(null);
   const messagesTabRef = useRef<HTMLButtonElement>(null);
   const subagentsTabRef = useRef<HTMLButtonElement>(null);
   const query = useQuery({
@@ -160,6 +160,9 @@ export function CoreSessionDetailPage({ sessionId }: CoreSessionDetailPageProps)
   );
 
   const { session, subagents, choices } = query.data;
+  const rawTailSubagent = rawTailSubagentId === null
+    ? null
+    : subagents.find((subagent) => subagent.id === rawTailSubagentId) ?? null;
   return <>
     <header className="page-heading core-detail-heading">
       <div>
@@ -219,10 +222,16 @@ export function CoreSessionDetailPage({ sessionId }: CoreSessionDetailPageProps)
       >
         {!isMobile ? <h2 className="core-panel__title" id="core-heading-subagents">{t('Subagents')}</h2> : null}
         {subagents.length === 0 ? <p className="core-empty">{t('No subagents.')}</p> : subagents.map((subagent) => (
-          <SubagentRow key={subagent.id} subagent={subagent} onRawTail={() => setRawTail(subagent)} />
+          <SubagentRow key={subagent.id} subagent={subagent} onRawTail={() => setRawTailSubagentId(subagent.id)} />
         ))}
       </section>
     </div>
-    {rawTail ? <RawTail alias={rawTail.alias} tail={rawTail.raw_tail} onClose={() => setRawTail(null)} /> : null}
+    {rawTailSubagent ? (
+      <RawTail
+        alias={rawTailSubagent.alias}
+        tail={rawTailSubagent.raw_tail}
+        onClose={() => setRawTailSubagentId(null)}
+      />
+    ) : null}
   </>;
 }

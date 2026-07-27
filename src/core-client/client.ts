@@ -12,6 +12,7 @@ import type {
 } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 2_000;
+const MAX_LIVE_RAW_TAILS = 256;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 const healthSchema = z.object({ ok: z.boolean(), version: z.string(), db_ok: z.boolean() });
@@ -99,6 +100,7 @@ export class CoreClient {
   private readonly timeoutMs: number;
   private readonly setTimeoutFn: typeof globalThis.setTimeout;
   private readonly clearTimeoutFn: typeof globalThis.clearTimeout;
+  private readonly liveRawTails = new Map<string, string>();
 
   constructor(baseUrl: string, options: CoreClientOptions = {}) {
     this.baseUrl = parseCoreBaseUrl(baseUrl);
@@ -109,7 +111,9 @@ export class CoreClient {
   }
 
   setBaseUrl(baseUrl: string): void {
-    this.baseUrl = parseCoreBaseUrl(baseUrl);
+    const nextBaseUrl = parseCoreBaseUrl(baseUrl);
+    if (nextBaseUrl !== this.baseUrl) this.liveRawTails.clear();
+    this.baseUrl = nextBaseUrl;
   }
 
   health(signal?: AbortSignal): Promise<CoreHealth> {
@@ -163,7 +167,11 @@ export class CoreClient {
       this.listMessages(sessionId, undefined, signal),
       this.listChoices(sessionId, signal),
     ]);
-    return { session, subagents, messages, choices };
+    const liveSubagents = subagents.map((subagent) => {
+      const rawTail = this.liveRawTails.get(liveRawTailKey(sessionId, subagent.id));
+      return rawTail === undefined ? subagent : { ...subagent, raw_tail: rawTail };
+    });
+    return { session, subagents: liveSubagents, messages, choices };
   }
 
   async resolveChoice(
@@ -205,18 +213,39 @@ export class CoreClient {
         buffer = frames.pop() ?? '';
         for (const frame of frames) {
           const event = parseSseFrame(frame);
-          if (event) yield event;
+          if (event) {
+            this.observeEvent(event);
+            yield event;
+          }
         }
         if (done) break;
       }
       const final = parseSseFrame(buffer);
-      if (final) yield final;
+      if (final) {
+        this.observeEvent(final);
+        yield final;
+      }
     } catch (error) {
       if (signal.aborted) return;
       if (error instanceof CoreClientError) throw error;
       throw protocolError();
     } finally {
       reader.releaseLock();
+    }
+  }
+
+  private observeEvent(event: AgentSquadCoreEvent): void {
+    if (event.type !== 'subagent_output' && event.type !== 'subagent_blocked') return;
+    const { session_id: sessionId, subagent_id: subagentId, raw_tail: rawTail } = event.payload;
+    if (typeof sessionId !== 'string' || typeof subagentId !== 'string' || typeof rawTail !== 'string') return;
+
+    const key = liveRawTailKey(sessionId, subagentId);
+    this.liveRawTails.delete(key);
+    this.liveRawTails.set(key, rawTail);
+    while (this.liveRawTails.size > MAX_LIVE_RAW_TAILS) {
+      const oldestKey = this.liveRawTails.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.liveRawTails.delete(oldestKey);
     }
   }
 
@@ -257,6 +286,10 @@ export class CoreClient {
       this.clearTimeoutFn(timer);
     }
   }
+}
+
+function liveRawTailKey(sessionId: string, subagentId: string): string {
+  return `${sessionId}\0${subagentId}`;
 }
 
 function parseEmbeddedJson<T>(input: string, schema: ZodType<T>): T {

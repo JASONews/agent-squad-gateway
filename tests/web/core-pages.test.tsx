@@ -476,6 +476,34 @@ describe('Core session debugger', () => {
     view.unmount();
     expect(source.closed).toBe(true);
   });
+
+  it('keeps an open raw tail live and formats JSONL with plain-text fallback', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    const user = userEvent.setup();
+    const view = renderAt('/core/sessions/sess_1');
+
+    await screen.findByText('Review payment retry logic');
+    await user.click(screen.getByRole('button', { name: 'View raw tail for rev' }));
+    const source = FakeEventSource.instances[0]!;
+    const nextTail = '{"type":"item.completed","item":{"text":"review complete"}}\nplain output <kept>';
+    debugResponse.subagents[0]!.raw_tail = nextTail;
+
+    act(() => source.emitMessage({ type: 'subagent_output', payload: { session_id: 'sess_1' } }));
+
+    await waitFor(() => expect(document.querySelector('.raw-tail__content')?.textContent).toBe(
+      '{\n'
+      + '  "type": "item.completed",\n'
+      + '  "item": {\n'
+      + '    "text": "review complete"\n'
+      + '  }\n'
+      + '}\n'
+      + 'plain output <kept>',
+    ));
+    await user.click(screen.getByRole('button', { name: 'Copy raw tail for rev' }));
+    expect(await navigator.clipboard.readText()).toBe(nextTail);
+
+    view.unmount();
+  });
 });
 
 describe('Core choice resolution', () => {

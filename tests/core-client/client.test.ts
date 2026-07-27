@@ -224,6 +224,34 @@ describe('CoreClient', () => {
       { type: 'subagent_status', payload: { session_id: 'sess_1' } },
     ]);
   });
+
+  it('merges the latest live SSE raw tail into the debug bundle', async () => {
+    const liveTail = '{"type":"item.completed","item":{"text":"live line 3"}}';
+    const { url } = await fakeCore((app) => {
+      registerReadRoutes(app);
+      app.get('/v1/events', async (_request, reply) => {
+        reply.hijack();
+        reply.raw.writeHead(200, { 'content-type': 'text/event-stream' });
+        reply.raw.end(`data: ${JSON.stringify({
+          type: 'subagent_output',
+          payload: {
+            session_id: 'sess_1',
+            subagent_id: 'sub_1',
+            raw_tail: liveTail,
+          },
+        })}\n\n`);
+      });
+    });
+    const client = new CoreClient(url);
+    const controller = new AbortController();
+
+    for await (const _event of client.events(controller.signal)) {
+      // Consume the event stream so the client observes the live tail.
+    }
+
+    const debug = await client.getSessionDebug('sess_1');
+    expect(debug.subagents[0]?.raw_tail).toBe(liveTail);
+  });
 });
 
 describe('CoreConnectionRepository', () => {

@@ -1,6 +1,6 @@
 {
   "name": "@jasonews/agent-squad-gateway",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Local control plane and OpenAI-compatible API gateway for coding CLI models.",
   "license": "MIT",
   "type": "module",
@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.2.1",
-    "@fastify/static": "^9.1.1",
+    "@fastify/static": "^10.1.2",
     "@opencode-ai/sdk": "1.17.15",
     "@tanstack/react-query": "^5.66.0",
     "ajv": "^8.20.0",

@@ -65,7 +65,7 @@ export function registerUiRoutes(app: FastifyInstance, options: UiRouteOptions =
     decorateReply: false,
     cacheControl: false,
     setHeaders(response, filePath) {
-      response.setHeader(
+      response.header(
         'cache-control',
         immutableAsset.test(basename(filePath))
           ? 'public, max-age=31536000, immutable'
