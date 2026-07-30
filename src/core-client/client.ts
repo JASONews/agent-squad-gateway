@@ -20,10 +20,46 @@ const sessionSchema = z.object({
   id: z.string(), root_task: z.string(), repo_path: z.string().nullable(),
   main_peer_id: z.string().nullable(), created_at: z.string(), updated_at: z.string(),
 });
+const contextUsageSchema = z.object({
+  input_tokens: z.number().int().nonnegative().optional(),
+  cached_input_tokens: z.number().int().nonnegative().optional(),
+  cache_write_input_tokens: z.number().int().nonnegative().optional(),
+  output_tokens: z.number().int().nonnegative().optional(),
+  reasoning_output_tokens: z.number().int().nonnegative().optional(),
+  total_tokens: z.number().int().nonnegative().optional(),
+  context_window_tokens: z.number().int().nonnegative().optional(),
+});
+const contextTelemetrySchema = z.object({
+  usage: contextUsageSchema.optional(),
+  compaction_count: z.number().int().nonnegative(),
+  last_compaction: z.object({
+    trigger: z.enum(['auto', 'manual', 'unknown']).optional(),
+    pre_tokens: z.number().int().nonnegative().optional(),
+    occurred_at: z.string(),
+  }).optional(),
+  updated_at: z.string().optional(),
+});
+const runProgressSchema = z.object({
+  assessment: z.enum(['not_started', 'starting', 'progressing', 'quiet', 'possibly_stalled', 'orphaned', 'completed', 'blocked', 'timed_out', 'failed']),
+  recommended_action: z.enum(['send', 'wait', 'inspect_then_wait', 'consider_split', 'retry_smaller', 'resolve_block', 'none']),
+  run_active: z.boolean(),
+  started_at: z.string().optional(),
+  last_output_at: z.string().optional(),
+  elapsed_ms: z.number().int().nonnegative().optional(),
+  idle_ms: z.number().int().nonnegative().optional(),
+  output_events: z.number().int().nonnegative(),
+  new_output_events: z.number().int().nonnegative(),
+  has_new_output: z.boolean(),
+  raw_tail: z.string().optional(),
+  recent_output_threshold_ms: z.number().int().positive(),
+  stall_suspect_threshold_ms: z.number().int().positive(),
+});
 const subagentSchema = z.object({
   id: z.string(), alias: z.string(), cli_type: z.string(), role: z.string(), status: z.string(),
   native_session_id: z.string().nullable(), cwd: z.string().nullable(), model: z.string().nullable(),
   reasoning_effort: z.string().nullable(), last_seen_at: z.string(), raw_tail: z.string().nullable(),
+  context_telemetry: contextTelemetrySchema.nullable().optional(),
+  progress: runProgressSchema.nullable().optional(),
 });
 const messageSchema = z.object({
   id: z.string(), session_id: z.string(), from_peer_id: z.string().nullable(),
@@ -126,7 +162,12 @@ export class CoreClient {
 
   async listSubagents(sessionId: string, signal?: AbortSignal): Promise<CoreSubagent[]> {
     const id = encodeURIComponent(sessionId);
-    return (await this.read(`/v1/sessions/${id}/subagents`, z.object({ subagents: z.array(subagentSchema) }), signal)).subagents;
+    const rows = (await this.read(`/v1/sessions/${id}/subagents`, z.object({ subagents: z.array(subagentSchema) }), signal)).subagents;
+    return rows.map((row) => ({
+      ...row,
+      context_telemetry: row.context_telemetry ?? null,
+      progress: row.progress ?? null,
+    }));
   }
 
   async listMessages(sessionId: string, limit?: number, signal?: AbortSignal): Promise<CoreMessage[]> {

@@ -113,6 +113,13 @@ test('Core session detail exposes raw tail, focus trapping, Escape, and reduced 
   await page.getByRole('link', { name: gateway.seed.rootTask }).click();
   await expect(page.getByRole('heading', { name: gateway.seed.rootTask })).toBeVisible();
   expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+  const messageRoute = page.locator('.core-message__route').first();
+  await expect(messageRoute).toHaveAttribute('aria-label', /reviewer-with-an-intentionally-long-alias to Main agent/);
+  await expect(messageRoute).toContainText('reviewer-with-an-intentionally-long-alias');
+  await expect(messageRoute).toContainText('fake');
+  await expect(messageRoute).toContainText('Main agent');
+  await expectContainedLayout(page);
+  await captureQa(page, 'desktop-core-session');
 
   const rawTailButton = page.getByRole('button', { name: /View raw tail/ });
   await rawTailButton.click();
@@ -245,6 +252,32 @@ test('Core SSE refreshes sessions and recovers through offline Retry Core', asyn
   await captureQa(page, 'desktop-core-sessions');
 });
 
+test('Core session history paginates with newest sessions first', async ({ page, gateway }, testInfo) => {
+  const history = gateway.core.addSessionHistory(23);
+  const newest = history.at(-1)!;
+  const oldest = history[0]!;
+
+  try {
+    await openGateway(page, gateway, '/core/sessions');
+
+    await expect(page.getByRole('link', { name: newest.root_task, exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: oldest.root_task, exact: true })).toBeHidden();
+    await expect(page.getByText('Page 1 of 2')).toBeVisible();
+    await expectContainedLayout(page);
+
+    await page.getByRole('button', { name: 'Next page' }).click();
+
+    await expect(page.getByRole('link', { name: oldest.root_task, exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: newest.root_task, exact: true })).toBeHidden();
+    await expect(page.getByText('Page 2 of 2')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next page' })).toBeDisabled();
+    await expectContainedLayout(page);
+    await captureQa(page, `${testInfo.project.name}-core-pagination`);
+  } finally {
+    gateway.core.removeSessionHistory();
+  }
+});
+
 test('mobile drawer and session tabs keep long content contained and keyboard accessible', async ({ page, gateway }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile');
   await openGateway(page, gateway, '/overview');
@@ -266,6 +299,10 @@ test('mobile drawer and session tabs keep long content contained and keyboard ac
   await expect(page.getByRole('heading', { name: 'Core Sessions' })).toBeVisible();
   await expectContainedLayout(page);
   await page.getByRole('link', { name: gateway.seed.rootTask }).click();
+  const messageRoute = page.locator('.core-message__route').first();
+  await expect(messageRoute).toHaveAttribute('aria-label', /reviewer-with-an-intentionally-long-alias to Main agent/);
+  await expectContainedLayout(page);
+  await captureQa(page, 'mobile-core-session');
   const messagesTab = page.getByRole('tab', { name: 'Messages' });
   const subagentsTab = page.getByRole('tab', { name: 'Subagents' });
   await messagesTab.focus();

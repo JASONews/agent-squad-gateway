@@ -34,6 +34,27 @@ const debugBundle = {
     reasoning_effort: 'high',
     last_seen_at: LAST_SEEN,
     raw_tail: 'checking item_74\n<script>alert("no")</script>',
+    context_telemetry: {
+      usage: { input_tokens: 24000, cached_input_tokens: 12000, output_tokens: 300 },
+      compaction_count: 1,
+      last_compaction: { trigger: 'auto' as const, pre_tokens: 190000, occurred_at: LAST_SEEN },
+      updated_at: LAST_SEEN,
+    },
+    progress: {
+      assessment: 'progressing' as const,
+      recommended_action: 'wait' as const,
+      run_active: true,
+      started_at: '2026-07-12T14:55:00.000Z',
+      last_output_at: '2026-07-12T14:59:59.000Z',
+      elapsed_ms: 300_000,
+      idle_ms: 1_000,
+      output_events: 12,
+      new_output_events: 2,
+      has_new_output: true,
+      raw_tail: 'checking item_74',
+      recent_output_threshold_ms: 60_000,
+      stall_suspect_threshold_ms: 180_000,
+    },
   }],
   messages: [{
     id: 'msg_1',
@@ -252,16 +273,43 @@ describe('Core session debugger', () => {
 
     expect(await screen.findByText('Review payment retry logic')).toBeVisible();
     expect(screen.getByRole('region', { name: 'Messages' })).toBeVisible();
-    expect(screen.getByRole('region', { name: 'Subagents' })).toBeVisible();
+    const subagentsRegion = screen.getByRole('region', { name: 'Subagents' });
+    expect(subagentsRegion).toBeVisible();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-    expect(screen.getByText('rev')).toBeVisible();
+    expect(within(subagentsRegion).getByText('rev')).toBeVisible();
     expect(screen.getByText('2 minutes ago')).toHaveAttribute('title', LAST_SEEN);
+    const subagent = within(subagentsRegion).getByText('rev').closest('article');
+    expect(subagent).not.toBeNull();
+    expect(within(subagent!).getByText('24,000 tokens')).toBeVisible();
+    expect(within(subagent!).getByText('auto / 190,000 tokens')).toBeVisible();
+    expect(within(subagent!).getByText('Progressing')).toBeVisible();
+    expect(within(subagent!).getByText('12 events / 1s idle')).toBeVisible();
+    expect(within(subagent!).getByText('Wait')).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'View raw tail for rev' }));
     expect(screen.getByRole('dialog', { name: 'Raw tail: rev' })).toBeVisible();
     expect(screen.getByText(/item_74/)).toBeVisible();
     expect(document.querySelector('.raw-tail__content script')).toBeNull();
     expect(screen.queryByRole('button', { name: /kill|terminate|send|spawn/i })).not.toBeInTheDocument();
+  });
+
+  it('refreshes active run diagnostics while output is silent', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderAt('/core/sessions/sess_1');
+      expect(await screen.findByText('Progressing')).toBeVisible();
+      const debugReads = () => fetchMock.mock.calls.filter(([input]) => (
+        requestPath(input).endsWith('/admin/core/sessions/sess_1/debug')
+      )).length;
+      expect(debugReads()).toBe(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      await waitFor(() => expect(debugReads()).toBeGreaterThan(1));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('limits messages to the newest history and renders them chronologically', async () => {
@@ -284,6 +332,69 @@ describe('Core session debugger', () => {
     expect(rows[0]).toHaveAttribute('data-message-id', 'msg_1');
     expect(rows.at(-1)).toHaveAttribute('data-message-id', 'msg_500');
     expect(screen.queryByText('history-0')).not.toBeInTheDocument();
+  });
+
+  it('shows explicit sender and recipient identities with multiple subagents', async () => {
+    debugResponse.subagents.push({
+      ...structuredClone(debugResponse.subagents[0]!),
+      id: 'sub_2',
+      alias: 'fix',
+      cli_type: 'claude',
+      role: 'fixer',
+      native_session_id: 'native_fix_1',
+    });
+    debugResponse.messages = [
+      {
+        id: 'msg_main_rev',
+        session_id: 'sess_1',
+        from_peer_id: 'main',
+        to_peer_id: 'sub_1',
+        kind: 'main_to_sub',
+        content: 'Review the retry branch.',
+        artifact_refs: null,
+        created_at: '2026-07-12T14:55:00.000Z',
+      },
+      {
+        id: 'msg_fix_main',
+        session_id: 'sess_1',
+        from_peer_id: 'sub_2',
+        to_peer_id: 'main',
+        kind: 'sub_to_main',
+        content: 'The patch is ready.',
+        artifact_refs: null,
+        created_at: '2026-07-12T14:56:00.000Z',
+      },
+      {
+        id: 'msg_rev_fix',
+        session_id: 'sess_1',
+        from_peer_id: 'sub_1',
+        to_peer_id: 'sub_2',
+        kind: 'handoff',
+        content: 'Passing the review notes.',
+        artifact_refs: null,
+        created_at: '2026-07-12T14:57:00.000Z',
+      },
+    ];
+
+    renderAt('/core/sessions/sess_1');
+
+    const mainToRev = (await screen.findByText('Review the retry branch.')).closest('article');
+    const mainToRevRoute = within(mainToRev!).getByLabelText('Main agent to rev');
+    expect(within(mainToRevRoute).getByText('Main agent')).toBeVisible();
+    expect(within(mainToRevRoute).getByText('main_1')).toBeVisible();
+    expect(within(mainToRevRoute).getByText('rev')).toBeVisible();
+    expect(within(mainToRevRoute).getByText('codex')).toBeVisible();
+
+    const fixToMain = screen.getByText('The patch is ready.').closest('article');
+    const fixToMainRoute = within(fixToMain!).getByLabelText('fix to Main agent');
+    expect(within(fixToMainRoute).getByText('fix')).toBeVisible();
+    expect(within(fixToMainRoute).getByText('claude')).toBeVisible();
+    expect(within(fixToMainRoute).getByText('Main agent')).toBeVisible();
+
+    const revToFix = screen.getByText('Passing the review notes.').closest('article');
+    const revToFixRoute = within(revToFix!).getByLabelText('rev to fix');
+    expect(within(revToFixRoute).getByText('rev')).toBeVisible();
+    expect(within(revToFixRoute).getByText('fix')).toBeVisible();
   });
 
   it('copies the native session ID and presents a null raw-tail state', async () => {
@@ -438,6 +549,48 @@ describe('Core session debugger', () => {
     expect(within(firstRow!).getByText('3')).toBeVisible();
     expect(within(firstRow!).getByText('2 / 1')).toBeVisible();
     expect(maxConcurrentDebugReads).toBe(4);
+  });
+
+  it('paginates Core sessions with the newest activity on the first page', async () => {
+    const user = userEvent.setup();
+    sessionListResponse = Array.from({ length: 23 }, (_, index) => {
+      const number = index + 1;
+      const timestamp = new Date(Date.parse('2026-07-12T12:00:00.000Z') + index * 60_000).toISOString();
+      return {
+        ...session,
+        id: `sess_page_${number}`,
+        root_task: `Paged task ${number}`,
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+    });
+
+    renderAt('/core/sessions');
+
+    const table = await screen.findByRole('table', { name: 'Core Sessions' });
+    await screen.findByRole('link', { name: 'Paged task 23' });
+    expect(within(table).getAllByRole('link')[0]).toHaveTextContent('Paged task 23');
+    expect(screen.getByRole('link', { name: 'Paged task 4' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Paged task 3' })).not.toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 2')).toBeVisible();
+    expect(screen.getByText('23 sessions')).toBeVisible();
+    expect(fetchMock.mock.calls.filter(([input]) => (
+      /\/admin\/core\/sessions\/[^/]+\/debug$/.test(requestPath(input))
+    ))).toHaveLength(20);
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+
+    await screen.findByRole('link', { name: 'Paged task 3' });
+    expect(within(table).getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Paged task 3', 'Paged task 2', 'Paged task 1',
+    ]);
+    expect(screen.queryByRole('link', { name: 'Paged task 23' })).not.toBeInTheDocument();
+    expect(screen.getByText('Page 2 of 2')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+    expect(fetchMock.mock.calls.filter(([input]) => (
+      /\/admin\/core\/sessions\/[^/]+\/debug$/.test(requestPath(input))
+    ))).toHaveLength(23);
   });
 
   it('retries Core offline reads without breaking Gateway navigation', async () => {

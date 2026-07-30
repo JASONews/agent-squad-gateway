@@ -250,6 +250,31 @@ export class FakeCore {
     return session;
   }
 
+  addSessionHistory(count: number): CoreSession[] {
+    const sessions = Array.from({ length: count }, (_, index) => {
+      const number = index + 1;
+      const timestamp = new Date(Date.parse('2026-07-14T12:00:00.000Z') + index * 60_000).toISOString();
+      return {
+        id: `sess_browser_history_${number}`,
+        root_task: `Browser history task ${number}`,
+        repo_path: `/workspace/history/${number}`,
+        main_peer_id: 'codex',
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+    });
+    for (const session of sessions) {
+      if (!this.sessions.some((candidate) => candidate.id === session.id)) this.sessions.push(session);
+    }
+    return sessions;
+  }
+
+  removeSessionHistory(): void {
+    for (let index = this.sessions.length - 1; index >= 0; index -= 1) {
+      if (this.sessions[index]?.id.startsWith('sess_browser_history_')) this.sessions.splice(index, 1);
+    }
+  }
+
   emitSessionUpdate(sessionId: string): void {
     const wire = `data: ${JSON.stringify({ type: 'session_update', payload: { session_id: sessionId } })}\n\n`;
     for (const client of this.eventClients) client.write(wire);

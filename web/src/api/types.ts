@@ -182,6 +182,41 @@ export interface CoreSession {
   updated_at: string;
 }
 
+export interface CoreContextTelemetry {
+  usage?: {
+    input_tokens?: number;
+    cached_input_tokens?: number;
+    cache_write_input_tokens?: number;
+    output_tokens?: number;
+    reasoning_output_tokens?: number;
+    total_tokens?: number;
+    context_window_tokens?: number;
+  };
+  compaction_count: number;
+  last_compaction?: {
+    trigger?: 'auto' | 'manual' | 'unknown';
+    pre_tokens?: number;
+    occurred_at: string;
+  };
+  updated_at?: string;
+}
+
+export interface CoreRunProgress {
+  assessment: 'not_started' | 'starting' | 'progressing' | 'quiet' | 'possibly_stalled' | 'orphaned' | 'completed' | 'blocked' | 'timed_out' | 'failed';
+  recommended_action: 'send' | 'wait' | 'inspect_then_wait' | 'consider_split' | 'retry_smaller' | 'resolve_block' | 'none';
+  run_active: boolean;
+  started_at?: string;
+  last_output_at?: string;
+  elapsed_ms?: number;
+  idle_ms?: number;
+  output_events: number;
+  new_output_events: number;
+  has_new_output: boolean;
+  raw_tail?: string;
+  recent_output_threshold_ms: number;
+  stall_suspect_threshold_ms: number;
+}
+
 export interface CoreSubagent {
   id: string;
   alias: string;
@@ -194,6 +229,8 @@ export interface CoreSubagent {
   reasoning_effort: string | null;
   last_seen_at: string;
   raw_tail: string | null;
+  context_telemetry?: CoreContextTelemetry | null;
+  progress?: CoreRunProgress | null;
 }
 
 export interface CoreMessage {

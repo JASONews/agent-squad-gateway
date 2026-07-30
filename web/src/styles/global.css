@@ -908,10 +908,59 @@ html[lang='zh-CN'] .field__label--optional::after { content: "（可选）"; }
   font-size: 12px;
 }
 
-.core-message__meta strong,
+.core-message__meta {
+  align-items: flex-start;
+}
+
 .core-subagent__heading strong,
 .core-choice__heading strong {
+  min-width: 0;
   color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.core-subagent__heading > .semantic-status,
+.core-choice__heading > .semantic-status {
+  flex: 0 0 auto;
+}
+
+.core-message__route,
+.core-message__details,
+.core-message__peer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.core-message__route {
+  gap: 8px;
+  color: var(--text);
+}
+
+.core-message__peer {
+  flex-wrap: wrap;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+
+.core-message__peer small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.core-message__route-arrow {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.core-message__details {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.core-message__kind {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .core-message p,
@@ -981,6 +1030,21 @@ html[lang='zh-CN'] .field__label--optional::after { content: "（可选）"; }
 .core-unavailable { margin-top: 24px; }
 .core-session-link { color: var(--accent); font-weight: 600; }
 .data-table td.core-wrap-cell { overflow-wrap: anywhere; white-space: normal; }
+.core-pagination {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+}
+.core-pagination__status {
+  min-width: 110px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
 
 @media (max-width: 760px) {
   .credential-row { grid-template-columns: minmax(0, 1fr); }
@@ -989,6 +1053,17 @@ html[lang='zh-CN'] .field__label--optional::after { content: "（可选）"; }
 
 @media (max-width: 959px) {
   .core-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .core-message__meta {
+    flex-direction: column;
+  }
+
+  .core-message__details {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 @media (max-width: 420px) {

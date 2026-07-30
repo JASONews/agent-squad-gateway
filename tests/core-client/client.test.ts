@@ -13,6 +13,27 @@ const SUBAGENT = {
   id: 'sub_1', alias: 'rev', cli_type: 'codex', role: 'reviewer', status: 'running',
   native_session_id: 'native_1', cwd: '/repo', model: 'gpt-5', reasoning_effort: 'high',
   last_seen_at: ISO, raw_tail: 'line 2',
+  context_telemetry: {
+    usage: { input_tokens: 24000, cached_input_tokens: 12000, output_tokens: 300 },
+    compaction_count: 1,
+    last_compaction: { trigger: 'auto' as const, pre_tokens: 190000, occurred_at: ISO },
+    updated_at: ISO,
+  },
+  progress: {
+    assessment: 'progressing' as const,
+    recommended_action: 'wait' as const,
+    run_active: true,
+    started_at: ISO,
+    last_output_at: ISO,
+    elapsed_ms: 10_000,
+    idle_ms: 1_000,
+    output_events: 12,
+    new_output_events: 2,
+    has_new_output: true,
+    raw_tail: 'line 2',
+    recent_output_threshold_ms: 60_000,
+    stall_suspect_threshold_ms: 180_000,
+  },
 };
 const MESSAGE = {
   id: 'msg_2', session_id: 'sess_1', from_peer_id: 'sub_1', to_peer_id: 'main',

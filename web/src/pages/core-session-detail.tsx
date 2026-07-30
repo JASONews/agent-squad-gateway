@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Copy, ScrollText } from 'lucide-react';
+import { ArrowRight, Copy, ScrollText } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { adminFetch } from '../api/client.js';
 import type { CoreChoice, CoreDebugBundle, CoreMessage, CoreSubagent } from '../api/types.js';
@@ -12,6 +12,18 @@ interface CoreSessionDetailPageProps { sessionId: string }
 const MESSAGE_LIMIT = 500;
 const MOBILE_DETAIL_QUERY = '(max-width: 959px)';
 type DetailPanel = 'messages' | 'subagents';
+type MessagePeerSide = 'source' | 'target';
+
+interface MessagePeerIdentity {
+  label: string;
+  detail?: string;
+  rawId: string | null;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1_000))}s`;
+  return `${Math.round(ms / 60_000)}m`;
+}
 
 function useMediaQuery(query: string): boolean {
   const mediaQuery = useMemo(() => window.matchMedia(query), [query]);
@@ -27,15 +39,56 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-function MessageRow({ message, aliases }: { message: CoreMessage; aliases: Map<string, string> }) {
+function MessageRow({
+  message,
+  peers,
+  mainPeerId,
+}: {
+  message: CoreMessage;
+  peers: Map<string, CoreSubagent>;
+  mainPeerId: string | null;
+}) {
   const { t } = useI18n();
-  const source = message.from_peer_id === null ? t('system') : aliases.get(message.from_peer_id) ?? message.from_peer_id;
+  const identify = (peerId: string | null, side: MessagePeerSide): MessagePeerIdentity => {
+    if (peerId === null) {
+      return { label: side === 'source' ? t('System') : t('Session'), rawId: null };
+    }
+    if (peerId === 'main' || (mainPeerId !== null && peerId === mainPeerId)) {
+      return {
+        label: t('Main agent'),
+        detail: mainPeerId !== null && mainPeerId !== 'main' ? mainPeerId : undefined,
+        rawId: peerId,
+      };
+    }
+    const subagent = peers.get(peerId);
+    if (subagent) {
+      return { label: subagent.alias, detail: subagent.cli_type, rawId: peerId };
+    }
+    return { label: peerId, rawId: peerId };
+  };
+  const source = identify(message.from_peer_id, 'source');
+  const target = identify(message.to_peer_id, 'target');
   return (
     <article className="core-message" data-message-id={message.id}>
       <div className="core-message__meta">
-        <strong>{message.kind}</strong>
-        <span>{t('From {source}', { source })}</span>
-        <Timestamp value={message.created_at} />
+        <div
+          className="core-message__route"
+          aria-label={t('{source} to {target}', { source: source.label, target: target.label })}
+        >
+          <span className="core-message__peer" title={source.rawId ?? undefined}>
+            <strong>{source.label}</strong>
+            {source.detail ? <small>{source.detail}</small> : null}
+          </span>
+          <ArrowRight className="core-message__route-arrow" size={15} aria-hidden="true" />
+          <span className="core-message__peer" title={target.rawId ?? undefined}>
+            <strong>{target.label}</strong>
+            {target.detail ? <small>{target.detail}</small> : null}
+          </span>
+        </div>
+        <div className="core-message__details">
+          <code className="core-message__kind">{message.kind}</code>
+          <Timestamp value={message.created_at} />
+        </div>
       </div>
       <p>{message.content ?? t('No message content.')}</p>
     </article>
@@ -45,6 +98,29 @@ function MessageRow({ message, aliases }: { message: CoreMessage; aliases: Map<s
 function SubagentRow({ subagent, onRawTail }: { subagent: CoreSubagent; onRawTail(): void }) {
   const { t } = useI18n();
   const [copyFailed, setCopyFailed] = useState(false);
+  const usage = subagent.context_telemetry?.usage;
+  const reportedTokens = usage?.total_tokens ?? usage?.input_tokens;
+  const assessmentLabels = {
+    not_started: t('Not started'),
+    starting: t('Starting'),
+    progressing: t('Progressing'),
+    quiet: t('Quiet'),
+    possibly_stalled: t('Possibly stalled'),
+    orphaned: t('Orphaned'),
+    completed: t('Completed'),
+    blocked: t('Blocked'),
+    timed_out: t('Timed out'),
+    failed: t('Failed'),
+  };
+  const actionLabels = {
+    send: t('Send task'),
+    wait: t('Wait'),
+    inspect_then_wait: t('Inspect, then wait'),
+    consider_split: t('Consider splitting'),
+    retry_smaller: t('Retry smaller'),
+    resolve_block: t('Resolve block'),
+    none: t('No action'),
+  };
   const copyNativeId = async () => {
     if (subagent.native_session_id === null) return;
     try {
@@ -66,6 +142,38 @@ function SubagentRow({ subagent, onRawTail }: { subagent: CoreSubagent; onRawTai
         <div><dt>{t('Model / effort')}</dt><dd>{subagent.model ?? t('Default')} / {subagent.reasoning_effort ?? t('Default')}</dd></div>
         <div><dt>{t('Last seen')}</dt><dd><Timestamp value={subagent.last_seen_at} /></dd></div>
         <div><dt>{t('Last active')}</dt><dd><Timestamp value={subagent.last_seen_at} relative /></dd></div>
+        <div>
+          <dt>{t('Reported usage')}</dt>
+          <dd>{reportedTokens === undefined ? t('Unavailable') : t('{count} tokens', { count: reportedTokens.toLocaleString() })}</dd>
+        </div>
+        <div>
+          <dt>{t('Compactions')}</dt>
+          <dd>{subagent.context_telemetry?.compaction_count ?? 0}</dd>
+        </div>
+        {subagent.progress ? (
+          <>
+            <div><dt>{t('Run assessment')}</dt><dd>{assessmentLabels[subagent.progress.assessment]}</dd></div>
+            <div>
+              <dt>{t('Output activity')}</dt>
+              <dd>
+                {t('{count} events', { count: subagent.progress.output_events })}
+                {subagent.progress.idle_ms === undefined ? '' : ` / ${t('{duration} idle', { duration: formatDuration(subagent.progress.idle_ms) })}`}
+              </dd>
+            </div>
+            <div><dt>{t('Suggested action')}</dt><dd>{actionLabels[subagent.progress.recommended_action]}</dd></div>
+          </>
+        ) : null}
+        {subagent.context_telemetry?.last_compaction ? (
+          <div>
+            <dt>{t('Last compaction')}</dt>
+            <dd>
+              {subagent.context_telemetry.last_compaction.trigger ?? t('Unknown')}
+              {subagent.context_telemetry.last_compaction.pre_tokens === undefined
+                ? ''
+                : ` / ${t('{count} tokens', { count: subagent.context_telemetry.last_compaction.pre_tokens.toLocaleString() })}`}
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt>{t('Native session')}</dt>
           <dd className="native-session">
@@ -127,9 +235,12 @@ export function CoreSessionDetailPage({ sessionId }: CoreSessionDetailPageProps)
   const query = useQuery({
     queryKey: ['core', 'session', sessionId],
     queryFn: () => adminFetch<CoreDebugBundle>(`/admin/core/sessions/${encodeURIComponent(sessionId)}/debug`),
+    refetchInterval: (current) => current.state.data?.subagents.some(
+      (subagent) => subagent.progress?.run_active,
+    ) ? 15_000 : false,
   });
-  const aliases = useMemo(
-    () => new Map(query.data?.subagents.map((subagent) => [subagent.id, subagent.alias]) ?? []),
+  const peers = useMemo(
+    () => new Map(query.data?.subagents.map((subagent) => [subagent.id, subagent]) ?? []),
     [query.data?.subagents],
   );
   const visibleMessages = useMemo(() => [...(query.data?.messages ?? [])]
@@ -209,7 +320,7 @@ export function CoreSessionDetailPage({ sessionId }: CoreSessionDetailPageProps)
       >
         {!isMobile ? <h2 className="core-panel__title" id="core-heading-messages">{t('Messages')}</h2> : null}
         {visibleMessages.length === 0 ? <p className="core-empty">{t('No messages.')}</p> : visibleMessages.map((message) => (
-          <MessageRow key={message.id} message={message} aliases={aliases} />
+          <MessageRow key={message.id} message={message} peers={peers} mainPeerId={session.main_peer_id} />
         ))}
         {choices.map((choice) => <ChoiceRow choice={choice} key={choice.id} />)}
       </section>
