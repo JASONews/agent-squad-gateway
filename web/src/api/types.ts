@@ -56,6 +56,25 @@ export interface CoreHealth {
 export type IsolationLevel = 'strict' | 'best_effort';
 export type StreamingMode = 'native' | 'none';
 export type ToolBridge = 'structured_output' | 'none';
+export type ModelCostTier = 'low' | 'medium' | 'high' | 'unknown';
+export type ModelLatencyTier = 'fast' | 'medium' | 'slow' | 'unknown';
+
+export interface ModelCapabilityDetails {
+  summary?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  recommendedFor?: string[];
+  avoidFor?: string[];
+  costTier?: ModelCostTier;
+  latencyTier?: ModelLatencyTier;
+  priority?: number;
+}
+
+export interface ModelCapabilityProfile extends ModelCapabilityDetails {
+  source: 'official_default' | 'user_override' | 'merged';
+  selectedEffort?: string;
+  effortProfiles?: Record<string, ModelCapabilityDetails>;
+}
 
 export interface TargetCapabilities {
   isolationLevel: IsolationLevel;
@@ -87,6 +106,7 @@ export interface InvocationTarget {
   capabilityVerifiedAt: string | null;
   capabilities: TargetCapabilities | null;
   capabilityError: string | null;
+  modelProfile?: ModelCapabilityProfile;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,7 +124,12 @@ export interface ProviderCapabilities {
   toolBridge: ToolBridge;
   resume: boolean;
   cancellation: boolean;
-  modelOptions?: Array<{ id: string; label: string; effortOptions: string[] | null }>;
+  modelOptions?: Array<{
+    id: string;
+    label: string;
+    effortOptions: string[] | null;
+    profile?: ModelCapabilityProfile;
+  }>;
   error?: string;
 }
 

@@ -310,6 +310,26 @@ async function startGatewayHarness(): Promise<{ harness: GatewayHarness; close()
     coreUrl: core.baseURL,
     port,
     webUiAuth: 'token',
+    modelProfiles: {
+      fake: {
+        fake: {
+          summary: 'Browser provider profile.',
+          strengths: ['Deterministic browser testing'],
+          weaknesses: ['Not a production model'],
+          recommendedFor: ['browser_validation'],
+          avoidFor: ['production_work'],
+          costTier: 'low',
+          latencyTier: 'fast',
+          priority: 80,
+          effortProfiles: {
+            high: {
+              summary: 'Browser provider high-effort profile.',
+              priority: 91,
+            },
+          },
+        },
+      },
+    },
   });
   mkdirSync(config.paths.stateDir, { recursive: true });
   const db = openGatewayDb(config.paths.dbPath);
@@ -328,7 +348,12 @@ async function startGatewayHarness(): Promise<{ harness: GatewayHarness; close()
     getFixedWorkspaces: () => targets.list()
       .flatMap((target) => target.fixedWorkspace === null ? [] : [target.fixedWorkspace]),
   });
-  const capabilityService = new CapabilityService(providers, targets, workspaces);
+  const capabilityService = new CapabilityService(
+    providers,
+    targets,
+    workspaces,
+    config.modelProfiles,
+  );
   const invocationService = new InvocationService(
     providers,
     new TargetScheduler(),

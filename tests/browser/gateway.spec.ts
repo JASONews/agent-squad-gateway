@@ -188,10 +188,24 @@ test('target editor exposes required choices, custom fallback, and validation fe
   await expect(dialog.getByRole('combobox', { name: /^Max concurrency/ })).toHaveValue('1');
   await expect(dialog.getByRole('combobox', { name: /^Workspace/ })).toHaveValue('managed');
 
-  await dialog.getByRole('button', { name: 'Save target' }).click();
+  await dialog.getByRole('button', { name: 'Create and verify' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Select a native model or enter a custom model.');
   await expectContainedLayout(page);
   await captureQa(page, `${testInfo.project.name}-target-editor`);
+});
+
+test('target editor displays the effective model profile', async ({ page, gateway }, testInfo) => {
+  await openGateway(page, gateway, '/targets');
+  await page.getByRole('button', { name: `Edit ${gateway.seed.targetId}` }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Edit target' });
+  const profile = dialog.getByRole('region', { name: 'Model profile' });
+  await expect(profile).toContainText('Browser provider high-effort profile.');
+  await expect(profile).toContainText('Deterministic browser testing');
+  await expect(profile).toContainText('Priority: 91');
+  await expect(profile).toContainText('User override');
+  await expectContainedLayout(page);
+  await captureQa(page, `${testInfo.project.name}-target-model-profile`);
 });
 
 test('run cancellation confirms the selected seeded run', async ({ page, gateway }, testInfo) => {

@@ -135,7 +135,28 @@ const availability = ['codex', 'claude', 'cursor', 'opencode', 'antigravity'].ma
     resume: cli !== 'antigravity',
     cancellation: true,
     modelOptions: cli === 'codex' ? [
-      { id: 'gpt-5.6', label: 'GPT-5.6', effortOptions: ['low', 'high', 'max'] },
+      {
+        id: 'gpt-5.6',
+        label: 'GPT-5.6',
+        effortOptions: ['low', 'high', 'max'],
+        profile: {
+          source: 'official_default' as const,
+          summary: 'Routine implementation profile.',
+          strengths: ['Fast implementation'],
+          weaknesses: ['Not for high-risk review'],
+          recommendedFor: ['basic_implementation'],
+          avoidFor: ['security_review'],
+          costTier: 'low' as const,
+          latencyTier: 'fast' as const,
+          priority: 90,
+          effortProfiles: {
+            max: {
+              summary: 'Careful routine implementation profile.',
+              priority: 92,
+            },
+          },
+        },
+      },
       { id: 'gpt-5.7', label: 'GPT-5.7', effortOptions: ['low', 'high'] },
     ] : cli === 'claude' ? [
       { id: 'default', label: 'Default (Opus)', effortOptions: ['low', 'high', 'max'] },
@@ -206,6 +227,15 @@ describe('Gateway target administration', () => {
     expect(screen.getByLabelText('Max concurrency')).toHaveValue('1');
     expect(screen.getByLabelText('Max queue')).toHaveValue('8');
     expect(screen.getByLabelText('Run timeout')).toHaveValue('');
+    expect(screen.getByRole('region', { name: 'Model profile' })).toHaveTextContent(
+      'Careful routine implementation profile.',
+    );
+    expect(screen.getByRole('region', { name: 'Model profile' })).toHaveTextContent(
+      'Fast implementation',
+    );
+    expect(screen.getByRole('region', { name: 'Model profile' })).toHaveTextContent(
+      'Priority: 92',
+    );
 
     await user.selectOptions(screen.getByLabelText('Workspace'), 'fixed');
     await user.type(screen.getByLabelText('Fixed workspace path'), '/Users/me/project');
@@ -238,6 +268,20 @@ describe('Gateway target administration', () => {
         acknowledge_fixed_workspace_downgrade: true,
       },
     }));
+  });
+
+  it('does not keep a stale profile after selecting a custom model', async () => {
+    const user = userEvent.setup();
+    renderAt('/targets');
+
+    await user.click(await screen.findByRole('button', { name: 'Edit codex-gpt56-max' }));
+    expect(screen.getByRole('region', { name: 'Model profile' })).toBeVisible();
+
+    await user.selectOptions(
+      screen.getByLabelText('Native model'),
+      within(screen.getByLabelText('Native model')).getByRole('option', { name: 'Custom...' }),
+    );
+    expect(screen.queryByRole('region', { name: 'Model profile' })).not.toBeInTheDocument();
   });
 
   it('shows verification progress in the dialog and target row until completion', async () => {

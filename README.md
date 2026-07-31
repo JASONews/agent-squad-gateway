@@ -91,12 +91,45 @@ start, the Gateway creates `~/.agent-squad/gateway/config.json`:
 {
   "address": "0.0.0.0",
   "port": 28772,
-  "web_ui_auth": "disabled"
+  "web_ui_auth": "disabled",
+  "model_profiles": {}
 }
 ```
 
 For host-only access, change `address` to `127.0.0.1`. Set `web_ui_auth` to `token` when the admin
 UI is reachable from an untrusted network. Restart the Gateway after editing the file.
+
+Gateway maintains advisory default profiles for models discovered through Codex, OpenCode,
+Antigravity, Claude Code, Cursor Agent, and Kimi Code. The target editor displays strengths,
+weaknesses, recommended work, cost/latency tiers, and effort-specific guidance. Users can override
+or add profiles with exact model IDs or `*` globs:
+
+```json
+{
+  "address": "0.0.0.0",
+  "port": 28772,
+  "web_ui_auth": "disabled",
+  "model_profiles": {
+    "codex": {
+      "gpt-5.6-luna": {
+        "strengths": ["Local repository implementation"],
+        "weaknesses": [],
+        "priority": 96,
+        "effort_profiles": {
+          "max": {
+            "recommended_for": ["careful_routine_implementation"],
+            "priority": 98
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Broad patterns apply before specific patterns, and user profiles apply after official defaults.
+Arrays replace inherited arrays; use an empty array to clear a default. Profiles are advisory and
+do not guarantee provider pricing, latency, or output quality.
 
 In the Web UI:
 
@@ -163,7 +196,7 @@ Gateway state is stored under `~/.agent-squad/gateway/`:
 
 | Path | Purpose |
 | --- | --- |
-| `config.json` | Address, port, and Web UI authentication mode |
+| `config.json` | Address, port, Web UI authentication, and model profile overrides |
 | `gateway.db` | Targets, clients, encrypted credentials, grants, and run metadata |
 | `master.key` | Encryption key for recoverable client API keys |
 | `admin-secret` | Local admin bootstrap secret |

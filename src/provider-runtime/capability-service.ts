@@ -2,8 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { TargetRepository } from '../control-plane/targets.js';
 import type { InvocationTarget, TargetCapabilities } from '../control-plane/types.js';
 import { GatewayError } from '../server/errors.js';
+import {
+  cloneModelProfile,
+  resolveGatewayModelProfile,
+  withModelProfiles,
+} from './model-profiles.js';
 import type { ProviderRegistry } from './registry.js';
-import type { ProviderCapabilities } from './types.js';
+import type {
+  ModelProfileCatalogByCli,
+  ProviderCapabilities,
+  ResolvedModelCapabilityProfile,
+} from './types.js';
 import type { WorkspaceManager } from './workspaces.js';
 
 const CONFORMANCE_TIMEOUT_MS = 2 * 60 * 1_000;
@@ -89,6 +98,9 @@ function cloneCapabilities(capabilities: ProviderCapabilities): ProviderCapabili
     modelOptions: capabilities.modelOptions?.map((option) => ({
       ...option,
       effortOptions: option.effortOptions === null ? null : [...option.effortOptions],
+      ...(option.profile === undefined
+        ? {}
+        : { profile: cloneModelProfile(option.profile) }),
     })),
     ...(capabilities.details === undefined ? {} : { details: [...capabilities.details] }),
   };
@@ -114,6 +126,7 @@ export class CapabilityService {
     private readonly providers: ProviderRegistry,
     private readonly targets: TargetRepository,
     private readonly workspaces: WorkspaceManager,
+    private readonly modelProfileOverrides: ModelProfileCatalogByCli = {},
   ) {}
 
   async scanInstalled(): Promise<CliAvailability[]> {
@@ -136,6 +149,7 @@ export class CapabilityService {
         && (typeof capabilities.version !== 'string' || capabilities.version.length === 0)) {
         capabilities = unavailableCapabilities('capability_probe_failed');
       }
+      capabilities = withModelProfiles(cli, capabilities, this.modelProfileOverrides);
       return { cli, scannedAt, capabilities: cloneCapabilities(capabilities) };
     }));
 
@@ -179,6 +193,27 @@ export class CapabilityService {
     }));
   }
 
+  resolveModelProfile(
+    cli: string,
+    model: string,
+    effort?: string | null,
+  ): ResolvedModelCapabilityProfile | undefined {
+    const option = this.availability
+      .find((entry) => entry.cli === cli)
+      ?.capabilities.modelOptions
+      ?.find((candidate) => candidate.id === model || candidate.label === model);
+    const identifiers = option && option.id !== option.label
+      ? [...new Set([model, option.id, option.label])]
+      : model;
+    const profile = resolveGatewayModelProfile(
+      cli,
+      identifiers,
+      this.modelProfileOverrides,
+      effort,
+    );
+    return profile === undefined ? undefined : cloneModelProfile(profile);
+  }
+
   async verifyTarget(targetId: string, confirmModelUsage: boolean): Promise<ProviderCapabilities> {
     if (confirmModelUsage !== true) {
       throw new GatewayError(
@@ -209,14 +244,18 @@ export class CapabilityService {
     );
 
     try {
-      const actual = await adapter.probeCapabilities({
-        mode: 'conformance',
-        targetId: target.id,
-        model: target.nativeModel,
-        effort: target.reasoningEffort,
-        workspace: lease.path,
-        signal: AbortSignal.timeout(CONFORMANCE_TIMEOUT_MS),
-      });
+      const actual = withModelProfiles(
+        target.cli,
+        await adapter.probeCapabilities({
+          mode: 'conformance',
+          targetId: target.id,
+          model: target.nativeModel,
+          effort: target.reasoningEffort,
+          workspace: lease.path,
+          signal: AbortSignal.timeout(CONFORMANCE_TIMEOUT_MS),
+        }),
+        this.modelProfileOverrides,
+      );
       if (!isVerifiedCapability(actual)) {
         throw new GatewayError(409, 'capability_verification_failed', 'capability verification failed');
       }

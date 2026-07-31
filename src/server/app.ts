@@ -105,7 +105,12 @@ export function buildGatewayApp(deps: GatewayAppDependencies): FastifyInstance {
         .flatMap((target) => target.fixedWorkspace === null ? [] : [target.fixedWorkspace]),
     });
   const capabilityService = deps.capabilityService
-    ?? new CapabilityService(providers, deps.targets, providerWorkspaces);
+    ?? new CapabilityService(
+      providers,
+      deps.targets,
+      providerWorkspaces,
+      deps.config.modelProfiles,
+    );
   const invocationService = deps.invocationService ?? new InvocationService(
     providers,
     new TargetScheduler(),

@@ -80,12 +80,43 @@ agent-squad-gateway open
 {
   "address": "0.0.0.0",
   "port": 28772,
-  "web_ui_auth": "disabled"
+  "web_ui_auth": "disabled",
+  "model_profiles": {}
 }
 ```
 
 只允许本机访问时，请把 `address` 改为 `127.0.0.1`。当管理界面可能被不可信网络访问时，
 请把 `web_ui_auth` 改为 `token`。修改后需要重启 Gateway。
+
+Gateway 为 Codex、OpenCode、Antigravity、Claude Code、Cursor Agent 和 Kimi Code
+发现的模型维护参考能力画像。Target 编辑器会显示优势、局限、适用任务、成本/延迟等级以及
+不同 reasoning effort 的建议。用户可以通过精确模型 ID 或 `*` glob 覆盖或补充画像：
+
+```json
+{
+  "address": "0.0.0.0",
+  "port": 28772,
+  "web_ui_auth": "disabled",
+  "model_profiles": {
+    "codex": {
+      "gpt-5.6-luna": {
+        "strengths": ["本地仓库实现"],
+        "weaknesses": [],
+        "priority": 96,
+        "effort_profiles": {
+          "max": {
+            "recommended_for": ["careful_routine_implementation"],
+            "priority": 98
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+宽泛 pattern 先于精确 pattern 合并，所有用户配置都在官方默认之后应用。数组会整体替换继承值，
+可以用空数组清除默认内容。画像仅供参考，不保证提供方价格、延迟或输出质量。
 
 在 Web UI 中依次完成：
 

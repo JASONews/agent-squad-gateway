@@ -41,6 +41,7 @@ describe('Gateway config file', () => {
       address: '0.0.0.0',
       port: 28_772,
       web_ui_auth: 'disabled',
+      model_profiles: {},
     });
     expect(statSync(path).mode & 0o777).toBe(0o600);
 
@@ -91,6 +92,50 @@ describe('Gateway config file', () => {
     expect(() => loadGatewayConfig({ baseDir, port: 0 })).toThrow('invalid Gateway configuration');
   });
 
+  it('loads model profile overrides without changing their replacement semantics', () => {
+    const baseDir = temporaryBaseDir();
+    writeConfig(baseDir, {
+      address: '127.0.0.1',
+      port: 28_772,
+      web_ui_auth: 'disabled',
+      model_profiles: {
+        codex: {
+          'gpt-5.6-luna': {
+            strengths: ['Local repository work'],
+            weaknesses: [],
+            recommended_for: ['routine_implementation'],
+            cost_tier: 'low',
+            priority: 96,
+            effort_profiles: {
+              max: {
+                latency_tier: 'medium',
+                priority: 98,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(loadGatewayConfig({ baseDir }).modelProfiles).toEqual({
+      codex: {
+        'gpt-5.6-luna': {
+          strengths: ['Local repository work'],
+          weaknesses: [],
+          recommendedFor: ['routine_implementation'],
+          costTier: 'low',
+          priority: 96,
+          effortProfiles: {
+            max: {
+              latencyTier: 'medium',
+              priority: 98,
+            },
+          },
+        },
+      },
+    });
+  });
+
   it.each([
     ['malformed JSON', '{not-json'],
     ['unknown fields', '{"address":"127.0.0.1","port":28772,"web_ui_auth":"disabled","token":"do-not-log"}'],
@@ -98,6 +143,7 @@ describe('Gateway config file', () => {
     ['address with a port', '{"address":"127.0.0.1:30000","port":28772,"web_ui_auth":"disabled"}'],
     ['invalid port', '{"address":"127.0.0.1","port":0,"web_ui_auth":"disabled"}'],
     ['invalid auth mode', '{"address":"127.0.0.1","port":28772,"web_ui_auth":"sometimes"}'],
+    ['invalid model profile', '{"address":"127.0.0.1","port":28772,"web_ui_auth":"disabled","model_profiles":{"codex":{"*":{"cost_tier":"free"}}}}'],
   ])('rejects %s without echoing file contents', (_label, content) => {
     const baseDir = temporaryBaseDir();
     const paths = resolveGatewayPaths(baseDir);

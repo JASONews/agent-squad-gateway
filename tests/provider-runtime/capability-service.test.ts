@@ -260,6 +260,40 @@ describe('CapabilityService', () => {
     expect(service.listAvailability()).toEqual(availability);
   });
 
+  it('attaches configured model profiles to transient scan results', async () => {
+    const adapter = new RecordingAdapter(capabilities({
+      modelOptions: [{ id: 'gpt-test', label: 'GPT Test', effortOptions: ['high'] }],
+    }));
+    providers.register('codex', adapter);
+    const service = new CapabilityService(providers, targets, workspaces, {
+      codex: {
+        'gpt-test': {
+          summary: 'Repository-specific test model.',
+          strengths: ['Fast test work'],
+          effortProfiles: {
+            high: { priority: 94 },
+          },
+        },
+      },
+    });
+
+    const availability = await service.scanInstalled();
+    expect(availability[0]?.capabilities.modelOptions?.[0]?.profile).toMatchObject({
+      source: 'user_override',
+      summary: 'Repository-specific test model.',
+      strengths: ['Fast test work'],
+    });
+    expect(service.resolveModelProfile('codex', 'gpt-test', 'high')).toMatchObject({
+      source: 'user_override',
+      selectedEffort: 'high',
+      priority: 94,
+    });
+
+    availability[0]?.capabilities.modelOptions?.[0]?.profile?.strengths?.push('mutation');
+    expect(service.listAvailability()[0]?.capabilities.modelOptions?.[0]?.profile?.strengths)
+      .toEqual(['Fast test work']);
+  });
+
   it('requires explicit model-usage confirmation before verification', async () => {
     createTarget('claude-default-max', { cli: 'claude', nativeModel: 'default' });
     const adapter = new RecordingAdapter(capabilities());

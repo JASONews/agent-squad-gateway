@@ -22,7 +22,39 @@ export interface ProviderImageAsset {
   detail: ProviderImageDetail;
 }
 
-export interface ProviderModelOption { id: string; label: string; effortOptions: string[] | null }
+export type ModelCostTier = 'low' | 'medium' | 'high' | 'unknown';
+export type ModelLatencyTier = 'fast' | 'medium' | 'slow' | 'unknown';
+
+export interface ModelCapabilityDetails {
+  summary?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  recommendedFor?: string[];
+  avoidFor?: string[];
+  costTier?: ModelCostTier;
+  latencyTier?: ModelLatencyTier;
+  priority?: number;
+}
+
+export interface ModelCapabilityProfile extends ModelCapabilityDetails {
+  effortProfiles?: Record<string, ModelCapabilityDetails>;
+}
+
+export type ModelProfileCatalog = Record<string, ModelCapabilityProfile>;
+export type ModelProfileCatalogByCli = Record<string, ModelProfileCatalog>;
+export type ModelProfileSource = 'official_default' | 'user_override' | 'merged';
+
+export interface ResolvedModelCapabilityProfile extends ModelCapabilityProfile {
+  source: ModelProfileSource;
+  selectedEffort?: string;
+}
+
+export interface ProviderModelOption {
+  id: string;
+  label: string;
+  effortOptions: string[] | null;
+  profile?: ResolvedModelCapabilityProfile;
+}
 
 export type ProviderProbeRequest =
   | { mode: 'static' }

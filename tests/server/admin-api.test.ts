@@ -118,6 +118,15 @@ beforeEach(async () => {
       });
       return { ...staticCapabilities, version: '1.2.0', verified: true, verifiedAt: '2026-07-12T12:31:00.000Z' };
     },
+    resolveModelProfile: (_cli: string, model: string, effort: string | null) =>
+      model === 'gpt-5.6'
+        ? {
+            source: 'official_default' as const,
+            selectedEffort: effort ?? undefined,
+            summary: 'Gateway test model profile.',
+            priority: 90,
+          }
+        : undefined,
   } as unknown as CapabilityService;
   dependencies = {
     config,
@@ -820,6 +829,12 @@ describe('Gateway control-plane admin API', () => {
       capabilityVersion: null,
       capabilityVerifiedAt: null,
       capabilities: null,
+      modelProfile: {
+        source: 'official_default',
+        selectedEffort: 'max',
+        summary: 'Gateway test model profile.',
+        priority: 90,
+      },
     });
 
     const invalidEnable = await app.inject({

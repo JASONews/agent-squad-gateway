@@ -722,6 +722,60 @@ html[lang='zh-CN'] .field__label--optional::after { content: "（可选）"; }
 
 .field select { width: 100%; }
 
+.model-profile {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  margin: 2px 0;
+  border-block: 1px solid var(--border);
+  padding: 12px 0;
+}
+
+.model-profile__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+}
+
+.model-profile__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-profile p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.model-profile dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 16px;
+  margin: 0;
+}
+
+.model-profile dl > div {
+  display: grid;
+  gap: 2px;
+}
+
+.model-profile dt,
+.model-profile > small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-profile dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
 .target-validation {
   margin: 12px 0 0;
   font-size: 13px;
@@ -1157,6 +1211,10 @@ html[lang='zh-CN'] .field__label--optional::after { content: "（可选）"; }
   }
 
   .target-form {
+    grid-template-columns: 1fr;
+  }
+
+  .model-profile dl {
     grid-template-columns: 1fr;
   }
 

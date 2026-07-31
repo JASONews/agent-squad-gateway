@@ -7,6 +7,7 @@ import type {
   CliAvailability,
   CliAvailabilityResponse,
   IsolationLevel,
+  ModelCapabilityProfile,
   StreamingMode,
   TargetsResponse,
   ToolBridge,
@@ -60,6 +61,7 @@ interface ModelChoice {
   value: string;
   label: string;
   effortOptions: string[];
+  profile?: ModelCapabilityProfile;
 }
 
 interface NumberPreset {
@@ -96,12 +98,77 @@ function modelChoicesFor(availability: CliAvailability[], cli: string): ModelCho
     const value = cli === 'antigravity' ? option.label : option.id;
     if (seen.has(value)) return [];
     seen.add(value);
-    return [{ value, label: option.label, effortOptions: option.effortOptions ?? [] }];
+    return [{
+      value,
+      label: option.label,
+      effortOptions: option.effortOptions ?? [],
+      ...(option.profile === undefined ? {} : { profile: option.profile }),
+    }];
   });
 }
 
 function preferredEffort(options: string[]): string {
   return options.includes('max') ? 'max' : options.at(-1) ?? '';
+}
+
+function effectiveModelProfile(
+  profile: ModelCapabilityProfile | undefined,
+  effort: string,
+): ModelCapabilityProfile | undefined {
+  if (!profile || !effort) return profile;
+  const effortProfile = profile.effortProfiles?.[effort];
+  if (!effortProfile) return profile;
+  return {
+    ...profile,
+    ...effortProfile,
+    effortProfiles: profile.effortProfiles,
+    selectedEffort: effort,
+  };
+}
+
+function readableProfileValue(value: string): string {
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function profileSourceLabel(source: ModelCapabilityProfile['source']): string {
+  if (source === 'official_default') return 'Official default';
+  if (source === 'user_override') return 'User override';
+  return 'Official + override';
+}
+
+function ModelProfileSummary({ profile }: { profile: ModelCapabilityProfile }) {
+  const { t } = useI18n();
+  const facts = [
+    profile.costTier ? `${t('Cost')}: ${t(readableProfileValue(profile.costTier))}` : null,
+    profile.latencyTier ? `${t('Latency')}: ${t(readableProfileValue(profile.latencyTier))}` : null,
+    profile.priority === undefined ? null : `${t('Priority')}: ${profile.priority}`,
+    `${t('Profile source')}: ${t(profileSourceLabel(profile.source))}`,
+  ].filter((fact): fact is string => fact !== null);
+  const lists = [
+    ['Strengths', profile.strengths, false],
+    ['Weaknesses', profile.weaknesses, false],
+    ['Recommended for', profile.recommendedFor, true],
+    ['Avoid for', profile.avoidFor, true],
+  ] as const;
+
+  return <section className="model-profile" aria-label={t('Model profile')}>
+    <div className="model-profile__heading">
+      <strong>{t('Model profile')}</strong>
+      <div className="model-profile__facts">
+        {facts.map((fact) => <span key={fact}>{fact}</span>)}
+      </div>
+    </div>
+    {profile.summary ? <p>{profile.summary}</p> : null}
+    <dl>
+      {lists.flatMap(([label, values, tags]) => values === undefined ? [] : [
+        <div key={label}>
+          <dt>{t(label)}</dt>
+          <dd>{values.map((value) => tags ? readableProfileValue(value) : value).join(', ') || '-'}</dd>
+        </div>,
+      ])}
+    </dl>
+    <small>{t('Model profiles are advisory and do not guarantee price, latency, or quality.')}</small>
+  </section>;
 }
 
 function initialCli(availability: CliAvailability[]): string {
@@ -271,6 +338,15 @@ function TargetEditor({
   const effortOptions = selectedModel?.effortOptions ?? [];
   const customEffort = forceCustomEffort || (form.reasoningEffort.length > 0
     && !effortOptions.includes(form.reasoningEffort));
+  const targetProfileStillApplies = target !== null
+    && form.cli === target.cli
+    && form.nativeModel === target.nativeModel
+    && form.reasoningEffort === (target.reasoningEffort ?? '');
+  const selectedProfile = selectedModel?.profile
+    ? effectiveModelProfile(selectedModel.profile, form.reasoningEffort)
+    : targetProfileStillApplies
+      ? target.modelProfile
+      : undefined;
   const identifiersValid = targetIdPattern.test(form.id)
     && aliases.every((alias) => alias !== form.id)
     && new Set(aliases).size === aliases.length;
@@ -416,6 +492,7 @@ function TargetEditor({
         {customEffort ? <Field label={t('Custom reasoning effort')} requirement="required">
           <input required value={form.reasoningEffort} onChange={(event) => setIdentity({ reasoningEffort: event.target.value })} />
         </Field> : null}
+        {selectedProfile ? <ModelProfileSummary profile={selectedProfile} /> : null}
         <Field label={t('Isolation')}>
           <select value={workspaceMode === 'fixed' ? 'best_effort' : form.isolationLevel} disabled={workspaceMode === 'fixed'} onChange={(event) => set('isolationLevel', event.target.value as IsolationLevel)}>
             <option value="strict">{t('Strict')}</option><option value="best_effort">{t('Best effort')}</option>

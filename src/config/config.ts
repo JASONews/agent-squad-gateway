@@ -1,6 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { z } from 'zod';
+import type {
+  ModelCapabilityDetails,
+  ModelCapabilityProfile,
+  ModelProfileCatalog,
+  ModelProfileCatalogByCli,
+} from '../provider-runtime/types.js';
 import { resolveGatewayPaths, type GatewayPaths } from './paths.js';
 
 export const GATEWAY_BIND_HOST = '0.0.0.0' as const;
@@ -15,10 +21,36 @@ const gatewayAddressSchema = z.string()
   .refine((value) => isIP(value) !== 0 || HOSTNAME_PATTERN.test(value), 'invalid address')
   .transform((value) => value.toLowerCase());
 
+const modelCapabilityDetailsSchema = z.object({
+  summary: z.string().min(1).optional(),
+  strengths: z.array(z.string().min(1)).optional(),
+  weaknesses: z.array(z.string().min(1)).optional(),
+  recommended_for: z.array(z.string().min(1)).optional(),
+  avoid_for: z.array(z.string().min(1)).optional(),
+  cost_tier: z.enum(['low', 'medium', 'high', 'unknown']).optional(),
+  latency_tier: z.enum(['fast', 'medium', 'slow', 'unknown']).optional(),
+  priority: z.number().int().min(0).max(100).optional(),
+}).strict();
+
+const modelCapabilityProfileSchema = modelCapabilityDetailsSchema.extend({
+  effort_profiles: z.record(z.string().min(1), modelCapabilityDetailsSchema).optional(),
+}).strict();
+
+const modelProfileCatalogSchema = z.record(
+  z.string().min(1),
+  modelCapabilityProfileSchema,
+);
+
+const modelProfilesByCliSchema = z.record(
+  z.string().min(1),
+  modelProfileCatalogSchema,
+).default({});
+
 const gatewayConfigFileSchema = z.object({
   address: gatewayAddressSchema,
   port: z.number().int().min(1).max(65_535),
   web_ui_auth: z.enum(['disabled', 'token']),
+  model_profiles: modelProfilesByCliSchema,
 }).strict();
 
 const runtimeGatewayConfigSchema = gatewayConfigFileSchema.extend({
@@ -31,6 +63,7 @@ const DEFAULT_GATEWAY_CONFIG_FILE: GatewayConfigFile = {
   address: GATEWAY_BIND_HOST,
   port: 28_772,
   web_ui_auth: 'disabled',
+  model_profiles: {},
 };
 
 export interface GatewayConfigInput {
@@ -39,6 +72,7 @@ export interface GatewayConfigInput {
   port?: number;
   coreUrl?: string;
   webUiAuth?: GatewayWebUiAuthMode;
+  modelProfiles?: ModelProfileCatalogByCli;
 }
 
 export interface GatewayConfig {
@@ -46,6 +80,7 @@ export interface GatewayConfig {
   port: number;
   coreUrl: string;
   webUiAuth: GatewayWebUiAuthMode;
+  modelProfiles: ModelProfileCatalogByCli;
   paths: GatewayPaths;
 }
 
@@ -60,6 +95,7 @@ export function resolveGatewayConfig(input: GatewayConfigInput = {}): GatewayCon
     port: fileConfig.port,
     coreUrl: (input.coreUrl ?? 'http://127.0.0.1:28771').replace(/\/$/, ''),
     webUiAuth: fileConfig.web_ui_auth,
+    modelProfiles: input.modelProfiles ?? {},
     paths: resolveGatewayPaths(input.baseDir),
   };
 }
@@ -71,12 +107,15 @@ export function loadGatewayConfig(input: GatewayConfigInput = {}): GatewayConfig
     address: input.address ?? fileConfig.address,
     port: input.port ?? fileConfig.port,
     web_ui_auth: input.webUiAuth ?? fileConfig.web_ui_auth,
+    model_profiles: fileConfig.model_profiles,
   }, 'Gateway configuration');
   return resolveGatewayConfig({
     ...input,
     address: mergedConfig.address,
     port: mergedConfig.port,
     webUiAuth: mergedConfig.web_ui_auth,
+    modelProfiles: input.modelProfiles
+      ?? resolveModelProfileCatalogByCli(mergedConfig.model_profiles),
   });
 }
 
@@ -140,6 +179,59 @@ function parseRuntimeConfig(value: unknown, label: string): GatewayConfigFile {
   const result = runtimeGatewayConfigSchema.safeParse(value);
   if (!result.success) throw new Error(`invalid ${label}`, { cause: result.error });
   return result.data;
+}
+
+type RawModelCapabilityDetails = z.infer<typeof modelCapabilityDetailsSchema>;
+type RawModelCapabilityProfile = z.infer<typeof modelCapabilityProfileSchema>;
+
+function resolveModelCapabilityDetails(
+  raw: RawModelCapabilityDetails,
+): ModelCapabilityDetails {
+  return {
+    ...(raw.summary === undefined ? {} : { summary: raw.summary }),
+    ...(raw.strengths === undefined ? {} : { strengths: [...raw.strengths] }),
+    ...(raw.weaknesses === undefined ? {} : { weaknesses: [...raw.weaknesses] }),
+    ...(raw.recommended_for === undefined
+      ? {}
+      : { recommendedFor: [...raw.recommended_for] }),
+    ...(raw.avoid_for === undefined ? {} : { avoidFor: [...raw.avoid_for] }),
+    ...(raw.cost_tier === undefined ? {} : { costTier: raw.cost_tier }),
+    ...(raw.latency_tier === undefined ? {} : { latencyTier: raw.latency_tier }),
+    ...(raw.priority === undefined ? {} : { priority: raw.priority }),
+  };
+}
+
+function resolveModelCapabilityProfile(
+  raw: RawModelCapabilityProfile,
+): ModelCapabilityProfile {
+  const effortProfiles = raw.effort_profiles === undefined
+    ? undefined
+    : Object.fromEntries(
+        Object.entries(raw.effort_profiles).map(([effort, details]) => [
+          effort,
+          resolveModelCapabilityDetails(details),
+        ]),
+      );
+  return {
+    ...resolveModelCapabilityDetails(raw),
+    ...(effortProfiles === undefined ? {} : { effortProfiles }),
+  };
+}
+
+function resolveModelProfileCatalogByCli(
+  raw: Record<string, Record<string, RawModelCapabilityProfile>>,
+): ModelProfileCatalogByCli {
+  return Object.fromEntries(
+    Object.entries(raw).map(([cli, catalog]) => [
+      cli,
+      Object.fromEntries(
+        Object.entries(catalog).map(([pattern, profile]) => [
+          pattern,
+          resolveModelCapabilityProfile(profile),
+        ]),
+      ) satisfies ModelProfileCatalog,
+    ]),
+  );
 }
 
 function isFileNotFoundError(error: unknown): boolean {

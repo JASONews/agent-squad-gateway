@@ -14,6 +14,7 @@ import type { ExtensionRepository } from '../control-plane/extensions.js';
 import type { GrantRepository } from '../control-plane/grants.js';
 import type { RunRepository } from '../control-plane/runs.js';
 import type { TargetRepository } from '../control-plane/targets.js';
+import type { InvocationTarget } from '../control-plane/types.js';
 import type { CapabilityService } from '../provider-runtime/capability-service.js';
 import type { AdminAuthService } from '../security/admin-auth.js';
 import { requireAdmin, sessionCookie } from './auth-hooks.js';
@@ -230,6 +231,18 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDepend
       throw new GatewayError(503, 'capability_service_unavailable', 'capability service unavailable');
     }
     return deps.capabilityService;
+  };
+  const targetResponse = (target: InvocationTarget | null) => {
+    if (target === null) return null;
+    const modelProfile = deps.capabilityService?.resolveModelProfile?.(
+      target.cli,
+      target.nativeModel,
+      target.reasoningEffort,
+    );
+    return {
+      ...target,
+      ...(modelProfile === undefined ? {} : { modelProfile }),
+    };
   };
 
   app.get('/admin/auth/mode', async (_request, reply) => {
@@ -498,12 +511,14 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDepend
     }
     try {
       const created = deps.targets.create(asTargetInput(input));
-      if (input.verify_on_create !== true) return reply.code(201).send(created);
+      if (input.verify_on_create !== true) {
+        return reply.code(201).send(targetResponse(created));
+      }
 
       try {
         const capabilities = await capabilityService().verifyTarget(created.id, true);
         return reply.headers(noStore).code(201).send({
-          target: deps.targets.get(created.id),
+          target: targetResponse(deps.targets.get(created.id)),
           capabilities,
           model_usage_consumed: true,
         });
@@ -517,7 +532,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDepend
   });
 
   app.get('/admin/targets', { preHandler: requireAuthenticatedAdmin }, async (_request, reply) => {
-    return reply.send({ targets: deps.targets.list() });
+    return reply.send({ targets: deps.targets.list().map(targetResponse) });
   });
 
   app.patch('/admin/targets/:id', { preHandler: requireAuthenticatedAdmin }, async (request, reply) => {
@@ -533,7 +548,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDepend
           throw new Error('capability_mismatch');
         }
       }
-      return reply.send(deps.targets.update(id, asTargetPatch(input)));
+      return reply.send(targetResponse(deps.targets.update(id, asTargetPatch(input))));
     } catch (error) {
       return knownError(error);
     }
